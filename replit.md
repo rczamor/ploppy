@@ -43,6 +43,29 @@ Preferred communication style: Simple, everyday language.
 - **Model**: OpenAI GPT-4o (latest model as of May 2024)
 - **Integration**: Uses environment variable for API key security
 
+### AI Search (`ai_search.py`)
+- **Purpose**: Advanced semantic search and analysis
+- **Libraries**: Gensim (Word2Vec, Doc2Vec), NLTK, TextBlob, scikit-learn
+- **Features**:
+  - Semantic contributor search with query expansion
+  - Duplicate detection using multiple similarity metrics
+  - Natural language query processing
+  - Advanced embeddings using ensemble methods
+- **Fallback**: TF-IDF vectorization when advanced models unavailable
+
+### AI Embeddings (`ai_embeddings.py`)
+- **Purpose**: Advanced text embeddings and similarity analysis
+- **Techniques**:
+  - Ensemble embeddings (TF-IDF + LDA + NMF)
+  - Topic modeling with Latent Dirichlet Allocation
+  - Non-negative Matrix Factorization
+  - Hierarchical clustering with optimal cluster detection
+- **Features**:
+  - Semantic search with nearest neighbors
+  - Entity similarity analysis with type detection
+  - Key phrase extraction
+  - Topic keyword extraction
+
 ### ML Clustering (`ml_clustering.py`)
 - **Purpose**: Machine learning-based donor segmentation
 - **Algorithms**: K-means clustering, DBSCAN, Isolation Forest

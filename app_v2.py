@@ -746,7 +746,7 @@ def show_ai_analysis_page():
     # Analysis options
     analysis_type = st.selectbox(
         "Select Analysis Type",
-        ["Contribution Patterns", "Donor Networks", "Duplicate Detection", "Semantic Search"]
+        ["Contribution Patterns", "Donor Networks", "Duplicate Detection", "Semantic Search", "Advanced Clustering", "Topic Analysis"]
     )
     
     if analysis_type == "Contribution Patterns":
@@ -870,6 +870,93 @@ def show_ai_analysis_page():
                     st.dataframe(display_df)
                 else:
                     st.info("No matching contributors found")
+    
+    elif analysis_type == "Advanced Clustering":
+        st.subheader("Advanced Contributor Clustering")
+        st.info("Using matrix factorization and topic modeling to group similar contributors")
+        
+        if st.button("Perform Advanced Clustering"):
+            with st.spinner("Building advanced embeddings and clustering..."):
+                try:
+                    from ai_embeddings import AdvancedEmbeddings
+                    embedder = AdvancedEmbeddings()
+                    embedder.build_contributor_embeddings()
+                    
+                    if embedder.documents is not None and not embedder.documents.empty:
+                        # Perform clustering
+                        clustered_data, cluster_analysis = embedder.cluster_contributors()
+                        
+                        # Display cluster analysis
+                        st.write("### Cluster Analysis")
+                        for _, cluster in cluster_analysis.iterrows():
+                            with st.expander(f"Cluster {int(cluster['cluster_id'])} ({int(cluster['size'])} contributors)"):
+                                col1, col2 = st.columns(2)
+                                with col1:
+                                    st.metric("Average Contribution", format_currency(cluster['avg_contribution']))
+                                    st.metric("Total Contributions", format_currency(cluster['total_contributions']))
+                                with col2:
+                                    st.write("**Contributor Types:**")
+                                    for ctype, count in cluster['contributor_types'].items():
+                                        st.write(f"- {ctype}: {count}")
+                                
+                                st.write("**Top Occupations:**")
+                                for occ, count in cluster['top_occupations'].items():
+                                    if pd.notna(occ):
+                                        st.write(f"- {occ}: {count}")
+                        
+                        # Show sample contributors from each cluster
+                        selected_cluster = st.selectbox(
+                            "Select a cluster to view contributors:",
+                            options=cluster_analysis['cluster_id'].tolist(),
+                            format_func=lambda x: f"Cluster {x} ({len(clustered_data[clustered_data['cluster'] == x])} members)"
+                        )
+                        
+                        cluster_members = clustered_data[clustered_data['cluster'] == selected_cluster]
+                        st.write(f"### Sample Contributors from Cluster {selected_cluster}")
+                        display_cols = ['full_name', 'contributor_type', 'occupation', 'total_amount', 'num_contributions']
+                        display_df = cluster_members[display_cols].head(20).copy()
+                        display_df['total_amount'] = display_df['total_amount'].apply(
+                            lambda x: format_currency(x) if pd.notna(x) else '$0'
+                        )
+                        st.dataframe(display_df)
+                    else:
+                        st.warning("No contributor data available for clustering")
+                        
+                except Exception as e:
+                    st.error(f"Error performing clustering: {str(e)}")
+    
+    elif analysis_type == "Topic Analysis":
+        st.subheader("Contribution Topic Analysis")
+        st.info("Extracting key themes and topics from contribution data")
+        
+        if st.button("Extract Topics"):
+            with st.spinner("Analyzing topics..."):
+                try:
+                    from ai_embeddings import AdvancedEmbeddings
+                    embedder = AdvancedEmbeddings()
+                    embedder.build_contributor_embeddings()
+                    
+                    if embedder.lda_model is not None:
+                        # Get topic keywords
+                        topics = embedder.get_topic_keywords(n_topics=10, n_words=8)
+                        
+                        st.write("### Discovered Topics")
+                        for topic_id, keywords in topics.items():
+                            st.write(f"**Topic {topic_id + 1}:** {', '.join(keywords)}")
+                        
+                        # Get key phrases
+                        key_phrases = embedder.extract_key_phrases(n_phrases=20)
+                        
+                        st.write("### Key Phrases in Dataset")
+                        phrases_df = pd.DataFrame(key_phrases, columns=['Phrase', 'Importance'])
+                        phrases_df['Importance'] = phrases_df['Importance'].apply(lambda x: f"{x:.3f}")
+                        st.dataframe(phrases_df)
+                        
+                    else:
+                        st.warning("Building topic model...")
+                        
+                except Exception as e:
+                    st.error(f"Error analyzing topics: {str(e)}")
 
 def show_natural_language_search_page():
     """Show natural language query interface."""
@@ -947,6 +1034,16 @@ def show_natural_language_search_page():
                 except Exception as e:
                     st.error(f"Error processing query: {str(e)}")
                     st.info("Try rephrasing your question or use one of the example queries")
+        
+        # Check if advanced NLP is available
+        try:
+            from ai_search import ADVANCED_NLP
+            if ADVANCED_NLP:
+                st.success("✓ Advanced NLP models (Gensim, NLTK, TextBlob) are active")
+            else:
+                st.warning("Basic search mode - Advanced NLP libraries not available")
+        except:
+            pass
     
     # Advanced search tips
     with st.expander("Search Tips"):

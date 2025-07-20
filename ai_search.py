@@ -13,8 +13,30 @@ from typing import List, Dict, Tuple, Optional
 from db_manager_v2 import NYCCFBDatabase
 from code_mappings import parse_name, is_individual_name
 
+# Import advanced NLP libraries
+try:
+    from gensim.models import Word2Vec, Doc2Vec
+    from gensim.models.doc2vec import TaggedDocument
+    import nltk
+    from textblob import TextBlob
+    ADVANCED_NLP = True
+    
+    # Download required NLTK data
+    try:
+        nltk.download('punkt', quiet=True)
+        nltk.download('stopwords', quiet=True)
+        nltk.download('wordnet', quiet=True)
+        nltk.download('averaged_perceptron_tagger', quiet=True)
+    except:
+        pass
+        
+except ImportError:
+    ADVANCED_NLP = False
+    
+from ai_embeddings import AdvancedEmbeddings, SemanticSearchEngine
+
 class ContributionAnalyzer:
-    """AI-powered analysis for political contributions using scikit-learn."""
+    """AI-powered analysis for political contributions using advanced NLP."""
     
     def __init__(self):
         self.db = NYCCFBDatabase()
@@ -22,9 +44,13 @@ class ContributionAnalyzer:
         self.contributor_embeddings = None
         self.contributor_data = None
         self.scaler = StandardScaler()
+        self.word2vec_model = None
+        self.doc2vec_model = None
+        self.advanced_embeddings = AdvancedEmbeddings() if ADVANCED_NLP else None
+        self.semantic_engine = SemanticSearchEngine() if ADVANCED_NLP else None
         
     def build_contributor_index(self):
-        """Build searchable index of contributors using TF-IDF."""
+        """Build searchable index of contributors using advanced embeddings."""
         query = """
             SELECT 
                 c.id,
@@ -65,20 +91,75 @@ class ContributionAnalyzer:
             ]
             search_texts.append(' '.join(filter(None, text_parts)))
         
-        # Create TF-IDF vectors
+        if ADVANCED_NLP and self.advanced_embeddings:
+            # Use advanced embeddings
+            self.advanced_embeddings.build_contributor_embeddings()
+            if self.semantic_engine:
+                self.semantic_engine.build_search_index()
+            
+            # Also build Word2Vec model for additional capabilities
+            if len(search_texts) > 10:
+                tokenized_texts = [text.lower().split() for text in search_texts]
+                self.word2vec_model = Word2Vec(
+                    sentences=tokenized_texts,
+                    vector_size=100,
+                    window=5,
+                    min_count=1,
+                    workers=4,
+                    epochs=10
+                )
+                
+                # Build Doc2Vec model
+                tagged_docs = [TaggedDocument(doc.lower().split(), [i]) 
+                              for i, doc in enumerate(search_texts)]
+                self.doc2vec_model = Doc2Vec(
+                    documents=tagged_docs,
+                    vector_size=100,
+                    window=5,
+                    min_count=1,
+                    workers=4,
+                    epochs=10
+                )
+        
+        # Always create TF-IDF as fallback
         self.vectorizer = TfidfVectorizer(max_features=1000, ngram_range=(1, 3))
         self.contributor_embeddings = self.vectorizer.fit_transform(search_texts)
     
     def semantic_search_contributors(self, query: str, top_k: int = 10) -> pd.DataFrame:
-        """Search contributors using semantic similarity."""
-        if self.vectorizer is None or self.contributor_embeddings is None:
+        """Search contributors using advanced semantic similarity."""
+        if self.contributor_data is None or self.contributor_data.empty:
             self.build_contributor_index()
         
         if self.contributor_data.empty:
             return pd.DataFrame()
         
+        # Use advanced search if available
+        if ADVANCED_NLP and self.semantic_engine:
+            results = self.semantic_engine.search(query, top_k)
+            if not results.empty:
+                return results
+        
+        # Fallback to TF-IDF
+        if self.vectorizer is None or self.contributor_embeddings is None:
+            self.build_contributor_index()
+            
+        # Enhance query with TextBlob if available
+        enhanced_query = query
+        if ADVANCED_NLP:
+            try:
+                blob = TextBlob(query)
+                # Add synonyms and related words
+                words = []
+                for word in blob.words:
+                    words.append(word)
+                    # Add lemmatized form
+                    words.append(word.lemmatize())
+                enhanced_query = ' '.join(words)
+            except:
+                pass
+        
         # Vectorize query
-        query_vector = self.vectorizer.transform([query])
+        query_vector = self.vectorizer.transform([enhanced_query])
         
         # Calculate similarities
         similarities = cosine_similarity(query_vector, self.contributor_embeddings).flatten()
