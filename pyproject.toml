@@ -2,7 +2,7 @@
 name = "repl-nix-workspace"
 version = "0.1.0"
 description = "Add your description here"
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 dependencies = [
     "beautifulsoup4>=4.13.4",
     "chardet>=5.2.0",
@@ -875,7 +875,7 @@ semantic-kernel = [{ index = "pytorch-cpu", marker = "platform_system == 'Linux'
 semantic-router = [{ index = "pytorch-cpu", marker = "platform_system == 'Linux'" }]
 senselab = [{ index = "pytorch-cpu", marker = "platform_system == 'Linux'" }]
 sent2vec = [{ index = "pytorch-cpu", marker = "platform_system == 'Linux'" }]
-sentence-transformers = [{ index = "pytorch-cpu", marker = "platform_system == 'Linux'" }]
+
 sequence-model-train = [{ index = "pytorch-cpu", marker = "platform_system == 'Linux'" }]
 serotiny = [{ index = "pytorch-cpu", marker = "platform_system == 'Linux'" }]
 sevenn = [{ index = "pytorch-cpu", marker = "platform_system == 'Linux'" }]
@@ -1144,3 +1144,4 @@ yta-general-utils = [{ index = "pytorch-cpu", marker = "platform_system == 'Linu
 zensvi = [{ index = "pytorch-cpu", marker = "platform_system == 'Linux'" }]
 zetascale = [{ index = "pytorch-cpu", marker = "platform_system == 'Linux'" }]
 zuko = [{ index = "pytorch-cpu", marker = "platform_system == 'Linux'" }]
+sentence-transformers = [{ index = "pytorch-cpu", marker = "platform_system == 'Linux'" }]

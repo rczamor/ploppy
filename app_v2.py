@@ -849,6 +849,16 @@ def show_ai_analysis_page():
     elif analysis_type == "Semantic Search":
         st.subheader("Semantic Contributor Search")
         
+        # Show which model is being used
+        try:
+            from ai_search import MODERN_SEARCH_AVAILABLE
+            if MODERN_SEARCH_AVAILABLE:
+                st.success("🚀 Using sentence-transformers (all-MiniLM-L6-v2) for modern semantic search")
+            else:
+                st.info("📊 Using ensemble embeddings (TF-IDF + LDA + NMF)")
+        except:
+            pass
+        
         search_query = st.text_input("Search contributors by name, occupation, employer, or location")
         
         if search_query:
@@ -858,18 +868,55 @@ def show_ai_analysis_page():
                 if not results.empty:
                     st.write(f"Found {len(results)} matching contributors")
                     
-                    display_df = results[['full_name', 'contributor_type', 'occupation', 
-                                         'employer_name', 'city', 'state', 'total_amount', 
-                                         'similarity_score']].copy()
-                    display_df['total_amount'] = display_df['total_amount'].apply(
-                        lambda x: format_currency(x) if pd.notna(x) else '$0'
-                    )
-                    display_df['similarity_score'] = display_df['similarity_score'].apply(
-                        lambda x: f"{x:.1%}"
-                    )
+                    # Check which columns are available
+                    display_cols = []
+                    for col in ['full_name', 'contributor_type', 'occupation', 
+                               'employer_name', 'city', 'state', 'total_amount', 
+                               'similarity_score']:
+                        if col in results.columns:
+                            display_cols.append(col)
+                    
+                    display_df = results[display_cols].copy()
+                    
+                    # Format currency columns
+                    if 'total_amount' in display_df.columns:
+                        display_df['total_amount'] = display_df['total_amount'].apply(
+                            lambda x: format_currency(x) if pd.notna(x) else '$0'
+                        )
+                    
+                    # Format similarity score
+                    if 'similarity_score' in display_df.columns:
+                        display_df['similarity_score'] = display_df['similarity_score'].apply(
+                            lambda x: f"{x:.1%}"
+                        )
+                    
                     st.dataframe(display_df)
                 else:
                     st.info("No matching contributors found")
+        
+        # Show available AI models
+        st.sidebar.markdown("---")
+        st.sidebar.subheader("Available AI Models")
+        
+        # Check for sentence-transformers
+        try:
+            import subprocess
+            result = subprocess.run([
+                "python3.10", "-c", 
+                "import sys; sys.path.insert(0, '/home/runner/.pythonlibs/lib/python3.10/site-packages'); from sentence_transformers import SentenceTransformer; print('available')"
+            ], capture_output=True, text=True)
+            
+            if result.returncode == 0 and "available" in result.stdout:
+                st.sidebar.success("✓ Sentence-Transformers (Modern)")
+                st.sidebar.info("Using all-MiniLM-L6-v2 model")
+            else:
+                st.sidebar.warning("⚠ Sentence-Transformers unavailable")
+        except:
+            pass
+        
+        # Always available models
+        st.sidebar.success("✓ Gensim (Word2Vec, Doc2Vec)")
+        st.sidebar.success("✓ Scikit-learn (TF-IDF, LDA, NMF)")
     
     elif analysis_type == "Advanced Clustering":
         st.subheader("Advanced Contributor Clustering")

@@ -35,6 +35,13 @@ except ImportError:
     
 from ai_embeddings import AdvancedEmbeddings, SemanticSearchEngine
 
+# Try to import modern sentence-transformers
+try:
+    from sentence_transformer_wrapper import sentence_transformer_wrapper
+    MODERN_SEARCH_AVAILABLE = sentence_transformer_wrapper.available
+except ImportError:
+    MODERN_SEARCH_AVAILABLE = False
+
 class ContributionAnalyzer:
     """AI-powered analysis for political contributions using advanced NLP."""
     
@@ -127,6 +134,16 @@ class ContributionAnalyzer:
     
     def semantic_search_contributors(self, query: str, top_k: int = 10) -> pd.DataFrame:
         """Search contributors using advanced semantic similarity."""
+        # Try sentence-transformers first
+        if MODERN_SEARCH_AVAILABLE:
+            try:
+                results = sentence_transformer_wrapper.semantic_search_contributors(query, top_k)
+                if not results.empty:
+                    return results
+            except Exception as e:
+                print(f"Sentence-transformers search failed: {e}")
+        
+        # Then try advanced embeddings
         if self.contributor_data is None or self.contributor_data.empty:
             self.build_contributor_index()
         
