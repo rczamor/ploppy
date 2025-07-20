@@ -30,8 +30,10 @@ Preferred communication style: Simple, everyday language.
   - Column name standardization with mapping for common variations
   - Data validation and cleaning
   - Derived feature generation
-- **Input**: Raw political contribution CSV data
+  - Handles null contributor names by creating "Anonymous Contributor" entries
+- **Input**: Raw political contribution CSV data (1.6M records)
 - **Output**: Cleaned and standardized DataFrame
+- **Import Status**: Fixed null name handling issue, now importing successfully
 
 ### AI Analyzer (`ai_analyzer.py`)
 - **Purpose**: AI-powered analysis using OpenAI GPT-4o

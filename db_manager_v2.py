@@ -138,7 +138,11 @@ class NYCCFBDatabase:
         try:
             name = row.get('NAME', '')
             if pd.isna(name) or not name:
-                return None
+                # For null names, use "Anonymous" or skip based on amount
+                amount = float(row.get('AMNT', 0)) if pd.notna(row.get('AMNT')) else 0
+                if amount == 0:
+                    return None  # Skip zero-amount anonymous contributions
+                name = "Anonymous Contributor"
             
             normalized_name = self.normalize_name(name)
             
