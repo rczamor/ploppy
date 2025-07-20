@@ -147,6 +147,23 @@ def main():
     st.title("🏛️ NYC Campaign Finance Board Data Explorer")
     st.markdown("Explore political contributions data from the NYC Campaign Finance Board")
     
+    # Show import progress if available
+    if os.path.exists('import_progress.txt'):
+        with open('import_progress.txt', 'r') as f:
+            progress_info = f.read()
+        
+        progress_container = st.container()
+        with progress_container:
+            with st.expander("📊 Background Import Progress", expanded=True):
+                col1, col2, col3 = st.columns([2, 1, 1])
+                with col1:
+                    st.code(progress_info)
+                with col2:
+                    st.info("🔄 Import running in background")
+                with col3:
+                    if st.button("🔄 Refresh"):
+                        st.rerun()
+    
     # Sidebar
     with st.sidebar:
         st.header("Navigation")
