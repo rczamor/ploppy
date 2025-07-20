@@ -7,6 +7,7 @@ from datetime import datetime
 import numpy as np
 import re
 from typing import Dict, List, Optional, Tuple
+from replit.object_storage import Client as ObjectStorageClient
 
 class PoliticalContributionDB:
     """Database manager for political contribution graph database."""
@@ -14,6 +15,7 @@ class PoliticalContributionDB:
     def __init__(self):
         self.database_url = os.environ.get('DATABASE_URL')
         self.engine = create_engine(self.database_url)
+        self.storage_client = None
     
     def load_csv_data(self, csv_path: str) -> pd.DataFrame:
         """Load and validate CSV data."""
@@ -208,6 +210,37 @@ class PoliticalContributionDB:
             print(f"Error creating recipient: {e}")
             return str(uuid.uuid4())
     
+    def map_cfb_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Map CFB (Campaign Finance Board) columns to standard format."""
+        # Create a mapped DataFrame with standardized column names
+        mapped_df = pd.DataFrame()
+        
+        # Map donor information
+        mapped_df['donor_name'] = df['NAME']
+        mapped_df['occupation'] = df['OCCUPATION']
+        mapped_df['employer'] = df['EMPNAME']
+        
+        # Map recipient information
+        mapped_df['recipient'] = df['RECIPNAME']
+        mapped_df['office'] = df['OFFICECD']
+        mapped_df['party'] = df['CANCLASS']  # Using candidate class as party proxy
+        
+        # Map contribution details
+        mapped_df['amount'] = df['AMNT']
+        mapped_df['date'] = df['DATE']
+        
+        # Map location information
+        mapped_df['city'] = df['CITY']
+        mapped_df['state'] = df['STATE']
+        mapped_df['zip'] = df['ZIP']
+        
+        # Additional fields
+        mapped_df['election_year'] = df['ELECTION']
+        mapped_df['payment_method'] = df['PAY_METHOD']
+        mapped_df['match_amount'] = df['MATCHAMNT']
+        
+        return mapped_df
+    
     def import_contributions_from_dataframe(self, df: pd.DataFrame, batch_size: int = 1000) -> Dict:
         """Import political contribution data from DataFrame into graph database."""
         try:
@@ -346,3 +379,104 @@ class PoliticalContributionDB:
                 return stats
         except Exception as e:
             return {'error': str(e)}
+    
+    def connect_to_object_storage(self, bucket_id: str = 'data_files') -> bool:
+        """Connect to Replit Object Storage bucket."""
+        try:
+            self.storage_client = ObjectStorageClient(bucket_id=bucket_id)
+            print(f"Connected to object storage bucket: {bucket_id}")
+            return True
+        except Exception as e:
+            print(f"Failed to connect to bucket {bucket_id}: {e}")
+            # Try without bucket_id (default bucket)
+            try:
+                self.storage_client = ObjectStorageClient()
+                print("Connected to default object storage bucket")
+                return True
+            except Exception as e2:
+                print(f"Failed to connect to default bucket: {e2}")
+                return False
+    
+    def list_bucket_files(self, prefix: str = "", file_extension: str = ".csv") -> List[str]:
+        """List files in the object storage bucket."""
+        try:
+            if not self.storage_client:
+                if not self.connect_to_object_storage():
+                    return []
+            
+            all_objects = list(self.storage_client.list(prefix=prefix))
+            
+            # Extract file names from objects
+            all_files = [obj.name if hasattr(obj, 'name') else str(obj) for obj in all_objects]
+            
+            # Filter by extension if specified
+            if file_extension:
+                files = [f for f in all_files if f.lower().endswith(file_extension.lower())]
+            else:
+                files = all_files
+            
+            print(f"Found {len(files)} files with extension '{file_extension}'")
+            return files
+        except Exception as e:
+            print(f"Error listing files: {e}")
+            return []
+    
+    def download_and_import_csv(self, filename: str, batch_size: int = 1000) -> Dict:
+        """Download CSV from object storage and import to database."""
+        try:
+            if not self.storage_client:
+                if not self.connect_to_object_storage():
+                    raise Exception("Could not connect to object storage")
+            
+            print(f"Downloading {filename} from object storage...")
+            
+            # Check if file exists
+            if not self.storage_client.exists(filename):
+                raise Exception(f"File {filename} not found in bucket")
+            
+            # Download file content as text
+            csv_content = self.storage_client.download_as_text(filename)
+            
+            # Convert to DataFrame
+            import io
+            df = pd.read_csv(io.StringIO(csv_content))
+            print(f"Successfully loaded {len(df)} records from {filename}")
+            
+            # Import to database
+            return self.import_contributions_from_dataframe(df, batch_size)
+            
+        except Exception as e:
+            print(f"Error downloading/importing {filename}: {e}")
+            return {
+                'total_rows': 0,
+                'successful_imports': 0,
+                'failed_imports': 0,
+                'errors': [str(e)]
+            }
+    
+    def download_csv_to_dataframe(self, filename: str) -> pd.DataFrame:
+        """Download CSV from object storage and return as DataFrame."""
+        try:
+            if not self.storage_client:
+                if not self.connect_to_object_storage():
+                    raise Exception("Could not connect to object storage")
+            
+            print(f"Downloading {filename} from object storage...")
+            
+            # Check if file exists
+            if not self.storage_client.exists(filename):
+                raise Exception(f"File {filename} not found in bucket")
+            
+            # Download file content as text
+            csv_content = self.storage_client.download_as_text(filename)
+            
+            # Convert to DataFrame
+            import io
+            df = pd.read_csv(io.StringIO(csv_content))
+            print(f"Successfully loaded {len(df)} records from {filename}")
+            
+            return df
+            
+        except Exception as e:
+            print(f"Error downloading {filename}: {e}")
+            return pd.DataFrame()
