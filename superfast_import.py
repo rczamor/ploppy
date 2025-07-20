@@ -205,6 +205,7 @@ class SuperFastImporter:
         print(f"\nProcessing {total_batches} batches of {batch_size:,} records...")
         print("This will run continuously until complete.\n")
         
+        # Process ALL batches, not just first 66
         for batch_num in range(total_batches):
             batch_start = time.time()
             start_idx = batch_num * batch_size
@@ -227,7 +228,7 @@ class SuperFastImporter:
                       f"Elapsed: {elapsed/60:.1f} min")
                 
                 # Save progress every 10 batches
-                if batch_num % 10 == 0:
+                if batch_num % 10 == 0 or imported > 0:
                     with open('import_progress.txt', 'w') as f:
                         f.write(f"Processed: {self.stats['total_processed']:,}\n")
                         f.write(f"Batch: {batch_num + 1}/{total_batches}\n")

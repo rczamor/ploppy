@@ -1,4 +1,8 @@
-Processed: 19,847
-Batch: 1/66
-Rate: 1392 records/sec
-Updated: 2025-07-20 23:38:59.839183
+Direct Import Progress
+====================
+Imported: 99,997 new records
+Current total: 231,537
+Target: 1,637,022
+Remaining: 1,405,485
+Progress: 14.1%
+Rate: 1535 records/sec

@@ -22,7 +22,7 @@ args = "Streamlit App"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "Background Import"
+args = "Direct Import"
 
 [[workflows.workflow]]
 name = "Streamlit App"
@@ -34,12 +34,12 @@ args = "streamlit run app_v2.py --server.port 5000"
 waitForPort = 5000
 
 [[workflows.workflow]]
-name = "Background Import"
+name = "Direct Import"
 author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd /home/runner/workspace && python3 superfast_import.py"
+args = "cd /home/runner/workspace && python3 direct_import.py"
 
 [[ports]]
 localPort = 5000
