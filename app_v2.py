@@ -13,6 +13,7 @@ import os
 from db_manager_v2 import NYCCFBDatabase
 from code_mappings import *
 from utils import format_currency
+from ai_search import ContributionAnalyzer, NaturalLanguageQueryProcessor
 
 # Page configuration
 st.set_page_config(
@@ -151,7 +152,7 @@ def main():
         st.header("Navigation")
         page = st.selectbox(
             "Select Page",
-            ["Overview", "Contributors", "Recipients", "Contributions", "Geographic Analysis", "Database Import"]
+            ["Overview", "Contributors", "Recipients", "Contributions", "Geographic Analysis", "AI Analysis", "Natural Language Search", "Database Import"]
         )
         
         st.markdown("---")
@@ -180,6 +181,10 @@ def main():
         show_contributions_page()
     elif page == "Geographic Analysis":
         show_geographic_page()
+    elif page == "AI Analysis":
+        show_ai_analysis_page()
+    elif page == "Natural Language Search":
+        show_natural_language_search_page()
     elif page == "Database Import":
         show_import_page()
 
@@ -730,6 +735,235 @@ def show_import_page():
                 
             except Exception as e:
                 st.error(f"Error generating report: {str(e)}")
+
+def show_ai_analysis_page():
+    """Show AI-powered analysis page."""
+    st.header("🤖 AI-Powered Analysis")
+    
+    # Initialize analyzer
+    analyzer = ContributionAnalyzer()
+    
+    # Analysis options
+    analysis_type = st.selectbox(
+        "Select Analysis Type",
+        ["Contribution Patterns", "Donor Networks", "Duplicate Detection", "Semantic Search"]
+    )
+    
+    if analysis_type == "Contribution Patterns":
+        st.subheader("ML-Based Contribution Pattern Analysis")
+        
+        if st.button("Analyze Patterns"):
+            with st.spinner("Analyzing contribution patterns..."):
+                patterns = analyzer.analyze_contribution_patterns()
+                
+                if patterns:
+                    # Display metrics
+                    col1, col2, col3, col4 = st.columns(4)
+                    
+                    with col1:
+                        st.metric("Total Contributions", f"{patterns['total_contributions']:,}")
+                    with col2:
+                        st.metric("Anomalous Contributions", f"{patterns['anomalous_contributions']:,}")
+                    with col3:
+                        st.metric("Anomaly Rate", f"{patterns['anomaly_percentage']:.1f}%")
+                    with col4:
+                        st.metric("Pattern Clusters", f"{patterns['num_clusters']:,}")
+                    
+                    # Contribution statistics
+                    st.subheader("Contribution Statistics")
+                    stats = patterns['contribution_stats']
+                    col1, col2, col3, col4 = st.columns(4)
+                    
+                    with col1:
+                        st.metric("Mean Amount", format_currency(stats['mean_amount']))
+                    with col2:
+                        st.metric("Median Amount", format_currency(stats['median_amount']))
+                    with col3:
+                        st.metric("Std Deviation", format_currency(stats['std_amount']))
+                    with col4:
+                        st.metric("Total Amount", format_currency(stats['total_amount']))
+                    
+                    # Top anomalies
+                    if patterns['top_anomalies']:
+                        st.subheader("Top Anomalous Contributions")
+                        anomaly_df = pd.DataFrame(patterns['top_anomalies'])
+                        anomaly_df['amount'] = anomaly_df['amount'].apply(format_currency)
+                        st.dataframe(anomaly_df)
+                else:
+                    st.warning("No patterns found in the data")
+    
+    elif analysis_type == "Donor Networks":
+        st.subheader("Donor Network Analysis")
+        
+        if st.button("Analyze Networks"):
+            with st.spinner("Analyzing donor networks..."):
+                networks = analyzer.analyze_donor_networks()
+                
+                if not networks.empty:
+                    st.write(f"Found {len(networks)} donor pairs with shared contribution patterns")
+                    
+                    # Display network connections
+                    display_df = networks.copy()
+                    display_df = display_df[['donor1_name', 'donor2_name', 'shared_recipients', 
+                                           'donor1_type', 'donor2_type']]
+                    st.dataframe(display_df)
+                    
+                    # Network visualization placeholder
+                    st.info("Network visualization would show connections between donors who contribute to the same recipients")
+                else:
+                    st.info("No significant donor networks found in current data")
+    
+    elif analysis_type == "Duplicate Detection":
+        st.subheader("Duplicate Contributor Detection")
+        
+        threshold = st.slider("Similarity Threshold", 0.7, 1.0, 0.85, 0.05)
+        
+        if st.button("Find Duplicates"):
+            with st.spinner("Searching for duplicate contributors..."):
+                analyzer.build_contributor_index()
+                duplicates = analyzer.detect_duplicate_contributors(threshold)
+                
+                if duplicates:
+                    st.write(f"Found {len(duplicates)} potential duplicate pairs")
+                    
+                    for i, dup in enumerate(duplicates[:10]):  # Show top 10
+                        st.write(f"**Pair {i+1}** (Similarity: {dup['similarity']:.2%})")
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            st.write("Contributor 1:")
+                            st.write(f"- Name: {dup['contributor1']['full_name']}")
+                            st.write(f"- Type: {dup['contributor1']['contributor_type']}")
+                            st.write(f"- Total: {format_currency(dup['contributor1']['total_amount'])}")
+                        
+                        with col2:
+                            st.write("Contributor 2:")
+                            st.write(f"- Name: {dup['contributor2']['full_name']}")
+                            st.write(f"- Type: {dup['contributor2']['contributor_type']}")
+                            st.write(f"- Total: {format_currency(dup['contributor2']['total_amount'])}")
+                        
+                        st.markdown("---")
+                else:
+                    st.info("No duplicate contributors found at this threshold")
+    
+    elif analysis_type == "Semantic Search":
+        st.subheader("Semantic Contributor Search")
+        
+        search_query = st.text_input("Search contributors by name, occupation, employer, or location")
+        
+        if search_query:
+            with st.spinner("Searching..."):
+                results = analyzer.semantic_search_contributors(search_query, top_k=20)
+                
+                if not results.empty:
+                    st.write(f"Found {len(results)} matching contributors")
+                    
+                    display_df = results[['full_name', 'contributor_type', 'occupation', 
+                                         'employer_name', 'city', 'state', 'total_amount', 
+                                         'similarity_score']].copy()
+                    display_df['total_amount'] = display_df['total_amount'].apply(
+                        lambda x: format_currency(x) if pd.notna(x) else '$0'
+                    )
+                    display_df['similarity_score'] = display_df['similarity_score'].apply(
+                        lambda x: f"{x:.1%}"
+                    )
+                    st.dataframe(display_df)
+                else:
+                    st.info("No matching contributors found")
+
+def show_natural_language_search_page():
+    """Show natural language query interface."""
+    st.header("🔍 Natural Language Search")
+    st.markdown("Ask questions about the campaign finance data in plain English")
+    
+    # Initialize query processor
+    nlp = NaturalLanguageQueryProcessor()
+    
+    # Example queries
+    st.subheader("Example Queries")
+    example_queries = [
+        "Show all contributors who gave to Adams",
+        "Top 10 contributors by total amount",
+        "Contributors from Brooklyn",
+        "Find all mayoral candidates",
+        "Show contributions from John Smith"
+    ]
+    
+    col1, col2, col3 = st.columns(3)
+    for i, query in enumerate(example_queries):
+        if i % 3 == 0:
+            col = col1
+        elif i % 3 == 1:
+            col = col2
+        else:
+            col = col3
+        
+        with col:
+            if st.button(query, key=f"example_{i}"):
+                st.session_state.nl_query = query
+    
+    # Query input
+    query = st.text_area(
+        "Enter your question:",
+        value=st.session_state.get('nl_query', ''),
+        height=100,
+        placeholder="e.g., Show me all contributors from Manhattan who gave more than $1000"
+    )
+    
+    if st.button("Search", type="primary") or query:
+        if query:
+            with st.spinner("Processing query..."):
+                try:
+                    sql, results = nlp.process_query(query)
+                    
+                    # Show SQL query (collapsible)
+                    with st.expander("View Generated SQL"):
+                        st.code(sql, language='sql')
+                    
+                    # Show results
+                    if not results.empty:
+                        st.success(f"Found {len(results)} results")
+                        
+                        # Format currency columns if present
+                        for col in results.columns:
+                            if 'amount' in col.lower() and results[col].dtype in ['float64', 'int64']:
+                                results[col] = results[col].apply(
+                                    lambda x: format_currency(x) if pd.notna(x) else ''
+                                )
+                        
+                        st.dataframe(results, use_container_width=True)
+                        
+                        # Download option
+                        csv = results.to_csv(index=False)
+                        st.download_button(
+                            label="Download Results as CSV",
+                            data=csv,
+                            file_name=f"query_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                            mime="text/csv"
+                        )
+                    else:
+                        st.info("No results found for your query")
+                        
+                except Exception as e:
+                    st.error(f"Error processing query: {str(e)}")
+                    st.info("Try rephrasing your question or use one of the example queries")
+    
+    # Advanced search tips
+    with st.expander("Search Tips"):
+        st.markdown("""
+        **Supported Query Types:**
+        - Find contributors to a specific candidate: "Show contributors who gave to [candidate name]"
+        - Top contributors: "Top [number] contributors by amount"
+        - Geographic searches: "Contributors from [city/state/borough]"
+        - Office-based searches: "Show all [office] candidates"
+        - Donor searches: "Show contributions from [donor name]"
+        
+        **Tips:**
+        - Use partial names for flexible matching
+        - Specify numbers for "top" queries
+        - Include location names for geographic filtering
+        - Office names: Mayor, Public Advocate, Comptroller, Borough President, City Council
+        """)
 
 if __name__ == "__main__":
     main()
