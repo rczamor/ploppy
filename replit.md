@@ -10,17 +10,17 @@ Preferred communication style: Simple, everyday language.
 
 ## System Architecture
 
-### Frontend Architecture
-- **Framework**: Streamlit web application with wide layout configuration
-- **User Interface**: Single-page application with sidebar navigation and expandable sections
-- **Session Management**: Streamlit session state for maintaining data and analysis results across interactions
-- **Caching**: Streamlit resource caching for component initialization to improve performance
+### Database Architecture
+- **Database**: PostgreSQL with graph database capabilities for political contribution relationships
+- **Schema Design**: Normalized tables for Elections, Contributors, Recipients, Contributions, Employers, Intermediaries, Filings, and Locations
+- **Name Parsing**: Automatic parsing of names into last, first, and middle initial fields
+- **Code Mappings**: All NYC CFB codes (office, borough, candidate class, etc.) mapped to human-readable values for UI display
 
-### Backend Architecture
+### Backend Architecture  
 - **Modular Design**: Component-based architecture with separate modules for different functionalities
-- **Data Processing Pipeline**: Sequential processing from raw data through cleaning, analysis, and visualization
-- **AI Integration**: OpenAI API integration for advanced analysis and insights
-- **Machine Learning**: Scikit-learn based clustering and anomaly detection
+- **Data Source**: NYC Campaign Finance Board CSV data files from object storage
+- **Language Models**: Open source models (Sentence Transformers, spaCy, FAISS) for classification and analysis
+- **Natural Language Queries**: PostgreSQL graph queries for exploring donor networks and contribution patterns
 
 ## Key Components
 
