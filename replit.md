@@ -2,7 +2,7 @@
 
 ## Overview
 
-This is an AI-powered Streamlit application for analyzing political contribution data. The system provides comprehensive analysis including machine learning clustering, compliance checking, interactive visualizations, and AI-powered insights using OpenAI's GPT-4o model.
+This is an AI-powered application for analyzing NYC Campaign Finance Board political contribution data using a PostgreSQL graph database and open source language models. The system enables natural language queries on political contribution patterns, donor networks, and campaign finance relationships.
 
 ## User Preferences
 
