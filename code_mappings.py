@@ -49,13 +49,25 @@ BOROUGH_CODES = {
     'Z': 'Outside NYC'
 }
 
-# Payment method codes
+# Payment method codes (based on actual CFB data)
 PAYMENT_METHODS = {
     1: 'Cash',
-    2: 'Check',
+    2: 'Check', 
     3: 'Credit Card',
     4: 'Electronic Transfer',
-    5: 'Other'
+    5: 'Other',
+    # Extended codes found in actual data
+    11: 'Cash',
+    12: 'Check',
+    13: 'Credit Card',
+    14: 'Electronic Transfer',
+    15: 'Other',
+    1253: 'Check',
+    1530: 'Electronic Transfer',
+    7686: 'Electronic Transfer',
+    8012: 'Electronic Transfer',
+    9253: 'Check',
+    # Add more as discovered
 }
 
 # Schedule types

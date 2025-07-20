@@ -306,10 +306,17 @@ class NYCCFBDatabase:
                 
                 # Create new location
                 location_id = str(uuid.uuid4())
-                borough_name = get_borough_name(borough_code) if borough_code else None
+                
+                # Handle borough code - ensure it's a single character or None
+                if pd.notna(borough_code) and str(borough_code) != 'nan' and len(str(borough_code)) == 1:
+                    borough_code_clean = str(borough_code)
+                else:
+                    borough_code_clean = None
+                    
+                borough_name = get_borough_name(borough_code_clean) if borough_code_clean else None
                 
                 # Determine region
-                region = 'NYC' if borough_code in ['M', 'K', 'Q', 'X', 'S'] else 'Outside NYC'
+                region = 'NYC' if borough_code_clean in ['M', 'K', 'Q', 'X', 'S'] else 'Outside NYC'
                 
                 conn.execute(text("""
                     INSERT INTO locations (id, street_number, street_name, apartment,
@@ -324,7 +331,7 @@ class NYCCFBDatabase:
                     'city': city.title(),
                     'state': state.upper(),
                     'zip_code': zip_code if zip_code else None,
-                    'borough_code': borough_code if borough_code else None,
+                    'borough_code': borough_code_clean,
                     'borough_name': borough_name,
                     'region': region
                 })
@@ -414,7 +421,11 @@ class NYCCFBDatabase:
         try:
             with self.engine.connect() as conn:
                 # Check if filing exists
-                filing_num = int(row.get('FILING', 0)) if pd.notna(row.get('FILING')) else 0
+                filing_raw = row.get('FILING', 0)
+                try:
+                    filing_num = int(filing_raw) if pd.notna(filing_raw) else 0
+                except (ValueError, TypeError):
+                    filing_num = 0  # Default for non-numeric values
                 
                 result = conn.execute(text("""
                     SELECT id FROM filings 
@@ -476,6 +487,10 @@ class NYCCFBDatabase:
             # Parse dates
             trans_date = pd.to_datetime(row.get('DATE'), errors='coerce')
             refund_date = pd.to_datetime(row.get('REFUNDDATE'), errors='coerce')
+            
+            # Convert NaT to None for PostgreSQL
+            trans_date = trans_date if pd.notna(trans_date) else None
+            refund_date = refund_date if pd.notna(refund_date) else None
             
             # Get amounts
             amount = float(row.get('AMNT', 0)) if pd.notna(row.get('AMNT')) else 0
@@ -545,10 +560,10 @@ class NYCCFBDatabase:
                     'segregated': row.get('SEG_IND') == 'Y',
                     'amount_cat': amount_category,
                     'election_cycle': row.get('ELECTION'),
-                    'quarter': trans_date.quarter if pd.notna(trans_date) else None,
-                    'month': trans_date.month if pd.notna(trans_date) else None,
-                    'day_of_year': trans_date.dayofyear if pd.notna(trans_date) else None,
-                    'weekday': trans_date.weekday() if pd.notna(trans_date) else None
+                    'quarter': trans_date.quarter if trans_date else None,
+                    'month': trans_date.month if trans_date else None,
+                    'day_of_year': trans_date.dayofyear if trans_date else None,
+                    'weekday': trans_date.weekday() if trans_date else None
                 })
                 conn.commit()
             
