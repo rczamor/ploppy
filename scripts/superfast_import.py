@@ -229,7 +229,7 @@ class SuperFastImporter:
                 
                 # Save progress every 10 batches
                 if batch_num % 10 == 0 or imported > 0:
-                    with open('import_progress.txt', 'w') as f:
+                    with open('logs/import_progress.txt', 'w') as f:
                         f.write(f"Processed: {self.stats['total_processed']:,}\n")
                         f.write(f"Batch: {batch_num + 1}/{total_batches}\n")
                         f.write(f"Rate: {rate:.0f} records/sec\n")

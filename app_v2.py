@@ -169,8 +169,8 @@ def main():
     
     print("App title displayed, checking import progress...")
     # Show import progress if available
-    if os.path.exists('import_progress.txt'):
-        with open('import_progress.txt', 'r') as f:
+    if os.path.exists('logs/import_progress.txt'):
+        with open('logs/import_progress.txt', 'r') as f:
             progress_info = f.read()
         
         progress_container = st.container()

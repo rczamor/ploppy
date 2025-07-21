@@ -173,7 +173,7 @@ class ExpendituresImporter:
                   f"Total: {self.stats['total_processed']:,}")
             
             # Save progress
-            with open('expenditures_import_progress.txt', 'w') as f:
+            with open('logs/expenditures_import_progress.txt', 'w') as f:
                 f.write(f"Expenditures Import Progress\n")
                 f.write(f"=========================\n")
                 f.write(f"Imported: {self.stats['total_processed']:,} records\n")

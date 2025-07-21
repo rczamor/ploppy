@@ -189,7 +189,7 @@ def direct_import():
               f"@ {rate:.0f}/sec | Total: {total_imported:,} | {elapsed/60:.1f} min")
         
         # Save progress
-        with open('import_progress.txt', 'w') as f:
+        with open('logs/import_progress.txt', 'w') as f:
             f.write(f"Direct Import Progress\n")
             f.write(f"====================\n")
             f.write(f"Imported: {total_imported:,} new records\n")

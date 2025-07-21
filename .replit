@@ -55,7 +55,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd /home/runner/workspace && python3 scripts/import_expenditures.py"
+args = "cd /home/runner/workspace && PYTHONPATH=/home/runner/workspace python3 scripts/import_expenditures.py"
 
 [[workflows.workflow]]
 name = "Import Intermediaries"
@@ -63,7 +63,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd /home/runner/workspace && python3 scripts/import_intermediary_contributions.py"
+args = "cd /home/runner/workspace && PYTHONPATH=/home/runner/workspace python3 scripts/import_intermediary_contributions.py"
 
 [[ports]]
 localPort = 5000

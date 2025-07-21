@@ -186,7 +186,7 @@ class ContinuousImporter:
                   f"Elapsed: {elapsed/60:.1f} min")
             
             # Save progress
-            with open('import_progress.txt', 'w') as f:
+            with open('logs/import_progress.txt', 'w') as f:
                 f.write(f"Continuous Import Progress\n")
                 f.write(f"========================\n")
                 f.write(f"Processed: {self.stats['total_processed']:,} new records\n")

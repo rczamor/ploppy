@@ -1,200 +1,81 @@
-# Political Contribution Data Analyzer
+# NYC Campaign Finance Board Data Explorer
 
-## Overview
+## Project Overview
+An advanced AI-powered platform for comprehensive NYC campaign finance data analysis, leveraging machine learning and big data techniques to provide deep insights into political contribution dynamics.
 
-This is an AI-powered application for analyzing NYC Campaign Finance Board political contribution data using a PostgreSQL graph database and open source language models. The system enables natural language queries on political contribution patterns, donor networks, and campaign finance relationships.
+### Key Technologies
+- **Frontend**: Streamlit for interactive web interface
+- **Database**: PostgreSQL for large-scale data storage
+- **Backend**: Python for advanced data processing
+- **ORM**: SQLAlchemy for database interactions
+- **Analytics**: Pandas and scikit-learn
+- **AI Integration**: OpenAI for intelligent insights
+
+## Project Structure
+```
+.
+├── app_v2.py                    # Main Streamlit application
+├── src/                         # Source code modules
+│   ├── database/                # Database management
+│   │   ├── db_manager_v2.py     # Database operations
+│   │   ├── code_mappings.py     # Data mappings and utilities
+│   │   └── schema_update.sql    # Database schema updates
+│   ├── ai/                      # AI/ML modules
+│   │   ├── ai_search.py         # AI-powered search
+│   │   ├── ai_embeddings.py     # Text embeddings
+│   │   ├── ai_analyzer.py       # Data analysis
+│   │   └── ai_sentence_transformers.py
+│   └── utils/                   # Utility modules
+│       ├── utils.py             # General utilities
+│       ├── visualizations.py    # Data visualizations
+│       ├── compliance_checker.py # Compliance checking
+│       ├── data_processor.py    # Data processing
+│       ├── ml_clustering.py     # ML clustering
+│       └── graph_analysis.py    # Graph analysis
+├── scripts/                     # Import and maintenance scripts
+│   ├── direct_import.py         # Direct data import
+│   ├── import_expenditures.py   # Expenditure import
+│   ├── import_intermediary_contributions.py
+│   └── monitor_all_imports.py   # Import monitoring
+├── logs/                        # Log files
+│   ├── import_progress.txt      # Import progress tracking
+│   └── expenditures_import_progress.txt
+└── archive/                     # Deprecated/old files
+
+```
+
+## Recent Changes (July 21, 2025)
+- **Organized project structure**: Moved 35+ files into logical directories
+- **Created module structure**: src/database, src/ai, src/utils for better organization
+- **Cleaned up logs**: Moved active log files to logs/ directory, removed unused logs
+- **Updated import paths**: Fixed all import statements to use new module structure
+- **Archived old files**: Moved deprecated scripts to archive/ directory
+
+## Database Schema
+The application uses PostgreSQL with the following main tables:
+- contributions - Political contributions data
+- expenditures - Campaign expenditures
+- contributors - Donor information
+- recipients - Candidate/committee information
+- intermediaries - Intermediary organizations
+- locations - Geographic data
+- employers - Employer information
+- elections - Election cycle data
+
+## Workflows
+1. **Direct Import**: Imports contribution data from CSV files
+2. **Import Expenditures**: Imports expenditure data
+3. **Import Intermediaries**: Imports intermediary contribution data
+4. **Streamlit App**: Main web application (port 5000)
 
 ## User Preferences
+- Keep code well-organized in logical directories
+- Maintain clean root directory structure
+- Use descriptive file and directory names
+- Document major architectural changes
 
-Preferred communication style: Simple, everyday language.
-
-## System Architecture
-
-### Database Architecture
-- **Database**: PostgreSQL with graph database capabilities for political contribution relationships
-- **Schema Design**: Normalized tables for Elections, Contributors, Recipients, Contributions, Employers, Intermediaries, Filings, Locations, and Expenditures
-- **Graph Model**: Implemented via materialized views for efficient network traversal:
-  - Contribution edges: Contributor → Recipient (with optional Intermediary)
-  - Expenditure edges: Recipient → Payee
-  - Intermediary edges: Contributor → Intermediary → Recipient
-- **Name Parsing**: Automatic parsing of names into last, first, and middle initial fields
-- **Code Mappings**: All NYC CFB codes (office, borough, candidate class, etc.) mapped to human-readable values for UI display
-
-### Backend Architecture  
-- **Modular Design**: Component-based architecture with separate modules for different functionalities
-- **Data Source**: NYC Campaign Finance Board CSV data files from object storage
-- **Language Models**: Open source models (Sentence Transformers, spaCy, FAISS) for classification and analysis
-- **Natural Language Queries**: PostgreSQL graph queries for exploring donor networks and contribution patterns
-
-## Key Components
-
-### Graph Analysis (`graph_analysis.py`)
-- **Purpose**: Graph database implementation for network analysis
-- **Features**:
-  - Network discovery: Find connected contributors, shared recipients
-  - Influence analysis: Calculate entity influence metrics
-  - Pattern detection: Identify coordinated giving, max-out networks, power bundlers
-  - Money flow tracing: Track contribution paths through the network
-- **Graph Views**:
-  - `graph_contribution_edges`: 1.9M contributor→recipient relationships
-  - `graph_expenditure_edges`: 55K recipient→payee relationships  
-  - `graph_intermediary_edges`: Bundler network connections
-- **Natural Language Interface**: Query the graph using plain English
-
-### Graph NLP Query (`graph_nlp_query.py`)
-- **Purpose**: Natural language interface for graph queries
-- **Example Queries**:
-  - "Show me the network of Bloomberg"
-  - "Who are the top 10 contributors?"
-  - "Find patterns in contributions"
-  - "Trace money flow from unions to Eric Adams"
-- **Query Types**: Network analysis, influence metrics, pattern detection, top entity queries
-
-### Data Processing (`data_processor.py`)
-- **Purpose**: Handles data loading, cleaning, and preprocessing
-- **Features**: 
-  - Column name standardization with mapping for common variations
-  - Data validation and cleaning
-  - Derived feature generation
-  - Handles null contributor names by creating "Anonymous Contributor" entries
-- **Input**: Raw political contribution CSV data (1.6M records)
-- **Output**: Cleaned and standardized DataFrame
-- **Import Status**: Fixed null name handling issue, now importing successfully
-
-### AI Analyzer (`ai_analyzer.py`)
-- **Purpose**: AI-powered analysis using OpenAI GPT-4o
-- **Features**:
-  - Comprehensive data summarization
-  - Pattern detection and insights generation
-  - Anomaly detection
-  - Recommendations generation
-- **Model**: OpenAI GPT-4o (latest model as of May 2024)
-- **Integration**: Uses environment variable for API key security
-
-### AI Search (`ai_search.py`)
-- **Purpose**: Advanced semantic search and analysis
-- **Libraries**: Gensim (Word2Vec, Doc2Vec), NLTK, TextBlob, scikit-learn
-- **Features**:
-  - Semantic contributor search with query expansion
-  - Duplicate detection using multiple similarity metrics
-  - Natural language query processing
-  - Advanced embeddings using ensemble methods
-- **Fallback**: TF-IDF vectorization when advanced models unavailable
-
-### AI Embeddings (`ai_embeddings.py`)
-- **Purpose**: Advanced text embeddings and similarity analysis
-- **Techniques**:
-  - Ensemble embeddings (TF-IDF + LDA + NMF)
-  - Topic modeling with Latent Dirichlet Allocation
-  - Non-negative Matrix Factorization
-  - Hierarchical clustering with optimal cluster detection
-- **Features**:
-  - Semantic search with nearest neighbors
-  - Entity similarity analysis with type detection
-  - Key phrase extraction
-  - Topic keyword extraction
-
-### ML Clustering (`ml_clustering.py`)
-- **Purpose**: Machine learning-based donor segmentation
-- **Algorithms**: K-means clustering, DBSCAN, Isolation Forest
-- **Features**:
-  - Donor behavior clustering
-  - Feature engineering for donor profiles
-  - Cluster statistical analysis
-- **Preprocessing**: StandardScaler for feature normalization, PCA for dimensionality reduction
-
-### Compliance Checker (`compliance_checker.py`)
-- **Purpose**: Regulatory compliance validation
-- **Features**:
-  - Federal and state contribution limit checking
-  - Data completeness validation
-  - Duplicate detection
-  - Date and amount validation
-- **Limits**: Configurable federal and state-specific contribution limits
-
-### Visualizations (`visualizations.py`)
-- **Purpose**: Interactive data visualization creation
-- **Library**: Plotly for interactive charts
-- **Chart Types**: Time series, geographic maps, distribution charts, correlation matrices
-- **Design**: Consistent color scheme and responsive layouts
-
-### Utilities (`utils.py`)
-- **Purpose**: Common utility functions
-- **Features**:
-  - Currency formatting with intelligent scaling (K/M notation)
-  - Data validation with comprehensive error reporting
-  - Column mapping for data standardization
-
-## Data Flow
-
-1. **Data Upload**: User uploads CSV file through Streamlit interface
-2. **Validation**: Initial data validation using `validate_data()` function
-3. **Processing**: Data cleaning and standardization via `DataProcessor`
-4. **Analysis Pipeline**:
-   - AI analysis for insights and patterns
-   - ML clustering for donor segmentation
-   - Compliance checking for regulatory validation
-   - Visualization generation
-5. **Results Display**: Interactive dashboard with multiple analysis views
-6. **Session Persistence**: Results cached in Streamlit session state
-
-## External Dependencies
-
-### Core Libraries
-- **Streamlit**: Web application framework
-- **Pandas/NumPy**: Data manipulation and analysis
-- **Plotly**: Interactive visualizations
-- **Scikit-learn**: Machine learning algorithms
-
-### AI/ML Services
-- **OpenAI API**: GPT-4o model for advanced analysis
-- **API Key Management**: Environment variable based configuration
-
-### Data Processing
-- **DateTime**: Date/time manipulation
-- **Regular Expressions**: Data cleaning and validation
-- **IO**: File handling utilities
-
-## Deployment Strategy
-
-### Environment Setup
-- **Python Environment**: Requires Python with scientific computing stack
-- **API Keys**: OpenAI API key must be set as environment variable `OPENAI_API_KEY`
-- **Dependencies**: All dependencies managed through standard Python package managers
-
-### Streamlit Configuration
-- **Page Config**: Wide layout with expanded sidebar
-- **Caching**: Resource caching for performance optimization
-- **Session Management**: Stateful session handling for data persistence
-
-### Security Considerations
-- **API Key Security**: Environment variable based API key management
-- **Data Privacy**: Client-side data processing, no persistent storage
-- **Input Validation**: Comprehensive data validation before processing
-
-### Scalability Features
-- **Modular Architecture**: Easy to extend with new analysis modules
-- **Caching Strategy**: Efficient resource utilization through Streamlit caching
-- **Configurable Limits**: Adjustable compliance limits and analysis parameters
-
-## Notable Design Decisions
-
-### AI Model Choice
-- **Decision**: Use OpenAI GPT-4o as the primary AI model
-- **Rationale**: Latest and most capable model available as of May 2024
-- **Constraint**: Explicitly configured not to change unless requested by user
-
-### Modular Architecture
-- **Decision**: Separate modules for each major functionality
-- **Rationale**: Maintainability, testability, and extensibility
-- **Benefits**: Easy to add new analysis types or modify existing ones
-
-### Streamlit Framework
-- **Decision**: Use Streamlit for the web interface
-- **Rationale**: Rapid development for data science applications
-- **Trade-offs**: Less customization flexibility but faster development
-
-### No Database Dependency
-- **Decision**: In-memory data processing without persistent storage
-- **Rationale**: Simplicity and privacy - data stays with the user
-- **Limitation**: Analysis must be re-run for each session
+## Development Guidelines
+- Always use relative imports within src/ modules
+- Keep logs in the logs/ directory
+- Archive old/deprecated code instead of deleting
+- Update this file when making structural changes

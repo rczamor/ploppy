@@ -72,7 +72,7 @@ def monitor_imports():
             # Check progress files
             print(f"\nIMPORT PROGRESS:")
             try:
-                with open('expenditures_import_progress.txt', 'r') as f:
+                with open('logs/expenditures_import_progress.txt', 'r') as f:
                     lines = f.readlines()
                     for line in lines[2:5]:  # Skip header lines
                         print(f"  Expenditures: {line.strip()}")

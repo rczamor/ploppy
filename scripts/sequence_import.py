@@ -156,7 +156,7 @@ def import_by_sequence():
               f"({rate:.0f} rec/sec) | Total: {total_imported:,}")
         
         # Save progress
-        with open('import_progress.txt', 'w') as f:
+        with open('logs/import_progress.txt', 'w') as f:
             f.write(f"Sequence-Based Import\n")
             f.write(f"===================\n")
             f.write(f"Imported: {total_imported:,} records\n")
