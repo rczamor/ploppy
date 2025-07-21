@@ -169,7 +169,7 @@ def main():
         st.header("Navigation")
         page = st.selectbox(
             "Select Page",
-            ["Overview", "Contributors", "Recipients", "Contributions", "Geographic Analysis", "AI Analysis", "Natural Language Search", "Database Import"]
+            ["Overview", "Contributors", "Recipients", "Contributions", "Geographic Analysis", "AI Analysis", "Natural Language Search", "Graph Network Analysis", "Database Import"]
         )
         
         st.markdown("---")
@@ -202,6 +202,8 @@ def main():
         show_ai_analysis_page()
     elif page == "Natural Language Search":
         show_natural_language_search_page()
+    elif page == "Graph Network Analysis":
+        show_graph_network_page()
     elif page == "Database Import":
         show_import_page()
 
@@ -631,6 +633,172 @@ def show_geographic_page():
         st.dataframe(display_df, use_container_width=True)
     else:
         st.info("No geographic data available. Please import contribution data first.")
+
+def show_graph_network_page():
+    """Show graph network analysis page."""
+    st.header("🔗 Graph Network Analysis")
+    st.write("Explore political contribution networks using natural language queries")
+    
+    # Import graph modules
+    try:
+        from graph_nlp_query import GraphNLPQuery
+        nlp_query = GraphNLPQuery()
+    except Exception as e:
+        st.error(f"Failed to load graph query system: {str(e)}")
+        return
+    
+    # Query interface
+    st.subheader("Natural Language Graph Queries")
+    
+    # Show example queries
+    with st.expander("📝 Example Queries", expanded=True):
+        examples = nlp_query.suggest_queries()
+        cols = st.columns(2)
+        for i, query in enumerate(examples):
+            cols[i % 2].markdown(f"• {query}")
+    
+    # Query input
+    user_query = st.text_input(
+        "Enter your query:",
+        placeholder="e.g., Show me the network of Bloomberg",
+        help="Ask questions about contributor networks, money flows, influence patterns, etc."
+    )
+    
+    if st.button("🔍 Search", type="primary") or user_query:
+        if user_query:
+            with st.spinner("Analyzing graph network..."):
+                result = nlp_query.execute_query(user_query)
+                
+                if 'error' in result:
+                    st.error(result['error'])
+                else:
+                    # Display results based on type
+                    if 'type' in result and result['type'].startswith('top_'):
+                        # Top queries results
+                        st.subheader(f"Results: {result['type'].replace('_', ' ').title()}")
+                        
+                        if 'results' in result:
+                            for i, item in enumerate(result['results'][:20], 1):
+                                with st.container():
+                                    col1, col2 = st.columns([3, 1])
+                                    with col1:
+                                        st.write(f"**{i}. {item['name']}**")
+                                    with col2:
+                                        if 'total_given' in item:
+                                            st.metric("Total Given", f"${item['total_given']:,.0f}")
+                                        elif 'total_received' in item:
+                                            st.metric("Total Received", f"${item['total_received']:,.0f}")
+                                        elif 'total_bundled' in item:
+                                            st.metric("Total Bundled", f"${item['total_bundled']:,.0f}")
+                    
+                    elif 'patterns' in result:
+                        # Pattern detection results
+                        st.subheader("Detected Patterns")
+                        
+                        pattern_types = {}
+                        for pattern in result['patterns']:
+                            p_type = pattern['pattern_type']
+                            if p_type not in pattern_types:
+                                pattern_types[p_type] = []
+                            pattern_types[p_type].append(pattern)
+                        
+                        for p_type, patterns in pattern_types.items():
+                            st.write(f"**{p_type.replace('_', ' ').title()}** ({len(patterns)} found)")
+                            
+                            for pattern in patterns[:5]:
+                                with st.expander(f"{pattern.get('contributor', pattern.get('bundler', pattern.get('recipient', 'Pattern')))}"):
+                                    for key, value in pattern.items():
+                                        if key != 'pattern_type':
+                                            st.write(f"**{key.replace('_', ' ').title()}:** {value}")
+                    
+                    elif 'influence_metrics' in result:
+                        # Influence analysis results
+                        st.subheader(f"Influence Analysis: {result['entity']}")
+                        
+                        metrics = result['influence_metrics']
+                        cols = st.columns(len(metrics))
+                        for i, (key, value) in enumerate(metrics.items()):
+                            with cols[i % len(cols)]:
+                                if isinstance(value, (int, float)):
+                                    if 'amount' in key or 'given' in key or 'received' in key or 'spent' in key:
+                                        st.metric(key.replace('_', ' ').title(), f"${value:,.0f}")
+                                    elif 'rate' in key:
+                                        st.metric(key.replace('_', ' ').title(), f"{value:.1%}")
+                                    else:
+                                        st.metric(key.replace('_', ' ').title(), f"{value:,.0f}")
+                        
+                        if 'connected_entities' in result:
+                            st.write("**Connected Entities:**")
+                            for entity in result['connected_entities'][:10]:
+                                st.write(f"• {entity['name']} - ${entity['amount']:,.0f} ({entity['transactions']} transactions)")
+                    
+                    elif 'nodes' in result and 'edges' in result:
+                        # Network visualization results
+                        st.subheader(f"Network: {result.get('center', {}).get('name', 'Entity')}")
+                        
+                        # Show stats if available
+                        if 'stats' in result:
+                            cols = st.columns(4)
+                            for i, (key, value) in enumerate(result['stats'].items()):
+                                with cols[i % 4]:
+                                    if 'amount' in key:
+                                        st.metric(key.replace('_', ' ').title(), f"${value:,.0f}")
+                                    else:
+                                        st.metric(key.replace('_', ' ').title(), f"{value:,}")
+                        
+                        # Show network info
+                        st.write(f"**Network contains {len(result['nodes'])} nodes and {len(result['edges'])} connections**")
+                        
+                        # List nodes by type
+                        node_types = {}
+                        for node in result['nodes']:
+                            n_type = node.get('type', 'unknown')
+                            if n_type not in node_types:
+                                node_types[n_type] = []
+                            node_types[n_type].append(node)
+                        
+                        for n_type, nodes in node_types.items():
+                            with st.expander(f"{n_type.title()}s ({len(nodes)})"):
+                                for node in nodes[:20]:
+                                    st.write(f"• **{node['name']}**")
+                    
+                    else:
+                        # Generic results display
+                        st.json(result)
+    
+    # Network statistics
+    st.divider()
+    st.subheader("📊 Network Statistics")
+    
+    try:
+        from graph_analysis import PoliticalFinanceGraph
+        with PoliticalFinanceGraph() as graph:
+            stats = graph.get_network_statistics()
+            
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Total Contributors", f"{stats.get('num_contributors', 0):,}")
+                st.metric("Active Contributors", f"{stats.get('active_contributors', 0):,}")
+            with col2:
+                st.metric("Total Recipients", f"{stats.get('num_recipients', 0):,}")
+                st.metric("Active Recipients", f"{stats.get('active_recipients', 0):,}")
+            with col3:
+                st.metric("Total Intermediaries", f"{stats.get('num_intermediaries', 0):,}")
+                st.metric("Active Intermediaries", f"{stats.get('active_intermediaries', 0):,}")
+            
+            col4, col5 = st.columns(2)
+            with col4:
+                st.metric("Contribution Edges", f"{stats.get('num_contributions', 0):,}")
+                st.metric("Total Contributions", f"${stats.get('total_contributions', 0):,.0f}")
+            with col5:
+                st.metric("Expenditure Edges", f"{stats.get('num_expenditures', 0):,}")
+                st.metric("Total Expenditures", f"${stats.get('total_expenditures', 0):,.0f}")
+            
+            if stats.get('avg_contributor_degree'):
+                st.info(f"Average contributor connects to {stats['avg_contributor_degree']:.1f} recipients")
+    
+    except Exception as e:
+        st.error(f"Failed to load network statistics: {str(e)}")
 
 def show_import_page():
     """Show data import page."""

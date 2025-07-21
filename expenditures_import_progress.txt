@@ -1,6 +1,6 @@
 Expenditures Import Progress
 =========================
-Imported: 349,939 records
-Progress: 53.8%
-Rate: 1500 records/sec
-Elapsed: 4.0 minutes
+Imported: 647,954 records
+Progress: 100.0%
+Rate: 1964 records/sec
+Elapsed: 6.7 minutes

@@ -12,7 +12,11 @@ Preferred communication style: Simple, everyday language.
 
 ### Database Architecture
 - **Database**: PostgreSQL with graph database capabilities for political contribution relationships
-- **Schema Design**: Normalized tables for Elections, Contributors, Recipients, Contributions, Employers, Intermediaries, Filings, and Locations
+- **Schema Design**: Normalized tables for Elections, Contributors, Recipients, Contributions, Employers, Intermediaries, Filings, Locations, and Expenditures
+- **Graph Model**: Implemented via materialized views for efficient network traversal:
+  - Contribution edges: Contributor → Recipient (with optional Intermediary)
+  - Expenditure edges: Recipient → Payee
+  - Intermediary edges: Contributor → Intermediary → Recipient
 - **Name Parsing**: Automatic parsing of names into last, first, and middle initial fields
 - **Code Mappings**: All NYC CFB codes (office, borough, candidate class, etc.) mapped to human-readable values for UI display
 
@@ -23,6 +27,28 @@ Preferred communication style: Simple, everyday language.
 - **Natural Language Queries**: PostgreSQL graph queries for exploring donor networks and contribution patterns
 
 ## Key Components
+
+### Graph Analysis (`graph_analysis.py`)
+- **Purpose**: Graph database implementation for network analysis
+- **Features**:
+  - Network discovery: Find connected contributors, shared recipients
+  - Influence analysis: Calculate entity influence metrics
+  - Pattern detection: Identify coordinated giving, max-out networks, power bundlers
+  - Money flow tracing: Track contribution paths through the network
+- **Graph Views**:
+  - `graph_contribution_edges`: 1.9M contributor→recipient relationships
+  - `graph_expenditure_edges`: 55K recipient→payee relationships  
+  - `graph_intermediary_edges`: Bundler network connections
+- **Natural Language Interface**: Query the graph using plain English
+
+### Graph NLP Query (`graph_nlp_query.py`)
+- **Purpose**: Natural language interface for graph queries
+- **Example Queries**:
+  - "Show me the network of Bloomberg"
+  - "Who are the top 10 contributors?"
+  - "Find patterns in contributions"
+  - "Trace money flow from unions to Eric Adams"
+- **Query Types**: Network analysis, influence metrics, pattern detection, top entity queries
 
 ### Data Processing (`data_processor.py`)
 - **Purpose**: Handles data loading, cleaning, and preprocessing
