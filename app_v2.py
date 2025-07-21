@@ -965,7 +965,9 @@ def show_ai_analysis_page():
     # Analysis options
     analysis_type = st.selectbox(
         "Select Analysis Type",
-        ["Contribution Patterns", "Donor Networks", "Duplicate Detection", "Semantic Search", "Advanced Clustering", "Topic Analysis"]
+        ["Contribution Patterns", "Donor Networks", "Duplicate Detection", "Semantic Search", 
+         "Advanced Clustering", "Topic Analysis", "Time Series Forecasting", "Entity Extraction", 
+         "Model Training & Fine-tuning"]
     )
     
     if analysis_type == "Contribution Patterns":
@@ -1223,6 +1225,365 @@ def show_ai_analysis_page():
                         
                 except Exception as e:
                     st.error(f"Error analyzing topics: {str(e)}")
+    
+    elif analysis_type == "Time Series Forecasting":
+        st.subheader("Contribution Time Series Forecasting")
+        st.info("Predict future contribution patterns using machine learning")
+        
+        forecast_type = st.radio(
+            "Forecast Type",
+            ["Election-wide Trends", "Candidate-specific", "Custom Entity"]
+        )
+        
+        if forecast_type == "Election-wide Trends":
+            if st.button("Generate Forecast"):
+                with st.spinner("Analyzing historical trends..."):
+                    try:
+                        # Prepare time series data
+                        ts_data = analyzer.forecaster.prepare_time_series_data(
+                            entity_type='election', frequency='D'
+                        )
+                        
+                        if not ts_data.empty and len(ts_data) > 60:
+                            # Analyze trends
+                            trends = analyzer.forecaster.analyze_trends(ts_data)
+                            
+                            col1, col2, col3, col4 = st.columns(4)
+                            with col1:
+                                st.metric("Trend Direction", trends['trend_direction'].title())
+                            with col2:
+                                st.metric("Total Growth", f"{trends['total_growth_pct']:.1f}%")
+                            with col3:
+                                st.metric("Momentum", f"{trends['momentum']:.2%}")
+                            with col4:
+                                st.metric("Volatility", f"{trends['volatility']:.2%}")
+                            
+                            # Train forecast model
+                            model_info = analyzer.forecaster.train_forecast_model(ts_data)
+                            
+                            st.write("### Model Performance")
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                st.metric("Training R²", f"{model_info['train_r2']:.3f}")
+                            with col2:
+                                st.metric("Test R²", f"{model_info['test_r2']:.3f}")
+                            
+                            # Generate forecast
+                            forecast_days = st.slider("Days to Forecast", 7, 90, 30)
+                            forecast = analyzer.forecaster.forecast_future(
+                                ts_data, model_info, days_ahead=forecast_days
+                            )
+                            
+                            # Plot results
+                            import plotly.graph_objects as go
+                            
+                            fig = go.Figure()
+                            
+                            # Historical data
+                            fig.add_trace(go.Scatter(
+                                x=ts_data.index,
+                                y=ts_data['total_amount'],
+                                mode='lines',
+                                name='Historical',
+                                line=dict(color='blue')
+                            ))
+                            
+                            # Forecast
+                            fig.add_trace(go.Scatter(
+                                x=forecast['date'],
+                                y=forecast['forecast'],
+                                mode='lines',
+                                name='Forecast',
+                                line=dict(color='red', dash='dash')
+                            ))
+                            
+                            # Confidence intervals
+                            fig.add_trace(go.Scatter(
+                                x=forecast['date'],
+                                y=forecast['forecast_upper'],
+                                fill=None,
+                                mode='lines',
+                                line_color='rgba(255,0,0,0)',
+                                showlegend=False
+                            ))
+                            
+                            fig.add_trace(go.Scatter(
+                                x=forecast['date'],
+                                y=forecast['forecast_lower'],
+                                fill='tonexty',
+                                mode='lines',
+                                line_color='rgba(255,0,0,0)',
+                                name='Confidence Interval'
+                            ))
+                            
+                            fig.update_layout(
+                                title="Contribution Forecast",
+                                xaxis_title="Date",
+                                yaxis_title="Total Contributions ($)",
+                                hovermode='x unified'
+                            )
+                            
+                            st.plotly_chart(fig, use_container_width=True)
+                            
+                            # Seasonality analysis
+                            seasonality = analyzer.forecaster.detect_seasonality(ts_data)
+                            st.write("### Seasonality Analysis")
+                            st.write(f"Strongest seasonality: **{seasonality['strongest_seasonality']}**")
+                            
+                        else:
+                            st.warning("Not enough historical data for forecasting (need at least 60 days)")
+                            
+                    except Exception as e:
+                        st.error(f"Error generating forecast: {str(e)}")
+        
+        elif forecast_type == "Candidate-specific":
+            # Get list of candidates
+            candidates = db_manager.get_all_recipients()
+            if not candidates.empty:
+                candidate_options = candidates.apply(
+                    lambda x: f"{x['last_name']}, {x['first_name']} - {x['office_sought']}", 
+                    axis=1
+                ).tolist()
+                
+                selected_candidate = st.selectbox(
+                    "Select Candidate",
+                    options=range(len(candidates)),
+                    format_func=lambda x: candidate_options[x]
+                )
+                
+                if st.button("Generate Candidate Forecast"):
+                    with st.spinner("Analyzing candidate contribution trends..."):
+                        try:
+                            candidate_id = candidates.iloc[selected_candidate]['id']
+                            
+                            # Prepare time series data
+                            ts_data = analyzer.forecaster.prepare_time_series_data(
+                                entity_type='candidate', 
+                                entity_id=candidate_id,
+                                frequency='D'
+                            )
+                            
+                            if not ts_data.empty and len(ts_data) > 30:
+                                # Train and forecast
+                                model_info = analyzer.forecaster.train_forecast_model(ts_data)
+                                forecast = analyzer.forecaster.forecast_future(
+                                    ts_data, model_info, days_ahead=30
+                                )
+                                
+                                # Display forecast summary
+                                st.write("### 30-Day Forecast Summary")
+                                total_forecast = forecast['forecast'].sum()
+                                avg_daily = forecast['forecast'].mean()
+                                
+                                col1, col2 = st.columns(2)
+                                with col1:
+                                    st.metric("Expected Total (30 days)", format_currency(total_forecast))
+                                with col2:
+                                    st.metric("Average Daily", format_currency(avg_daily))
+                                
+                            else:
+                                st.warning("Not enough data for this candidate")
+                                
+                        except Exception as e:
+                            st.error(f"Error: {str(e)}")
+    
+    elif analysis_type == "Entity Extraction":
+        st.subheader("Entity Extraction & Analysis")
+        st.info("Extract and analyze entities from contribution data")
+        
+        extraction_type = st.selectbox(
+            "Extraction Type",
+            ["Key Entities Overview", "Entity Search", "Entity Networks", "Text Analysis"]
+        )
+        
+        if extraction_type == "Key Entities Overview":
+            if st.button("Extract Key Entities"):
+                with st.spinner("Extracting key entities..."):
+                    try:
+                        entities = analyzer.entity_extractor.extract_key_entities_from_dataset(limit=50)
+                        
+                        # Display top individuals
+                        st.write("### Top Individual Contributors")
+                        individuals_df = entities['top_individuals'][['full_name', 'occupation', 
+                                                                     'employer', 'total_amount', 
+                                                                     'num_recipients']].copy()
+                        individuals_df['total_amount'] = individuals_df['total_amount'].apply(format_currency)
+                        st.dataframe(individuals_df)
+                        
+                        # Display top organizations
+                        st.write("### Top Organizational Contributors")
+                        orgs_df = entities['top_organizations'][['full_name', 'contributor_type', 
+                                                                'total_amount', 'num_recipients']].copy()
+                        orgs_df['total_amount'] = orgs_df['total_amount'].apply(format_currency)
+                        st.dataframe(orgs_df)
+                        
+                        # Display most connected
+                        st.write("### Most Connected Contributors")
+                        connected_df = entities['most_connected'][['full_name', 'num_recipients', 
+                                                                  'total_amount']].head(20).copy()
+                        connected_df['total_amount'] = connected_df['total_amount'].apply(format_currency)
+                        st.dataframe(connected_df)
+                        
+                    except Exception as e:
+                        st.error(f"Error extracting entities: {str(e)}")
+        
+        elif extraction_type == "Entity Search":
+            entity_name = st.text_input("Enter entity name to search:")
+            entity_type = st.radio("Entity Type", ["all", "contributor", "recipient"])
+            
+            if entity_name and st.button("Search Entity"):
+                with st.spinner("Searching..."):
+                    try:
+                        results = analyzer.entity_extractor.find_related_entities(
+                            entity_name, entity_type
+                        )
+                        
+                        if not results.empty:
+                            st.write(f"Found {len(results)} matching entities")
+                            display_df = results.copy()
+                            if 'total_amount' in display_df.columns:
+                                display_df['total_amount'] = display_df['total_amount'].apply(format_currency)
+                            st.dataframe(display_df)
+                        else:
+                            st.info("No matching entities found")
+                            
+                    except Exception as e:
+                        st.error(f"Error searching entities: {str(e)}")
+        
+        elif extraction_type == "Entity Networks":
+            network_type = st.radio("Network Type", ["contributor", "recipient"])
+            min_connections = st.slider("Minimum Shared Connections", 1, 20, 5)
+            
+            if st.button("Build Network"):
+                with st.spinner("Building entity network..."):
+                    try:
+                        network_data = analyzer.entity_extractor.create_entity_network(
+                            entity_type=network_type,
+                            min_connections=min_connections
+                        )
+                        
+                        if network_data['num_connections'] > 0:
+                            col1, col2, col3 = st.columns(3)
+                            with col1:
+                                st.metric("Total Entities", network_data['num_entities'])
+                            with col2:
+                                st.metric("Total Connections", network_data['num_connections'])
+                            with col3:
+                                st.metric("Avg Connections", f"{network_data['avg_connections']:.1f}")
+                            
+                            st.write("### Most Connected Entities")
+                            top_connected = pd.DataFrame(
+                                list(network_data['top_connected'].items()),
+                                columns=['Entity', 'Connections']
+                            )
+                            st.dataframe(top_connected)
+                            
+                            st.write("### Sample Network Connections")
+                            st.dataframe(network_data['network'].head(20))
+                        else:
+                            st.info("No connections found with the specified criteria")
+                            
+                    except Exception as e:
+                        st.error(f"Error building network: {str(e)}")
+        
+        elif extraction_type == "Text Analysis":
+            sample_text = st.text_area(
+                "Enter text to analyze:",
+                placeholder="Paste contribution description, donor info, or any text to extract entities..."
+            )
+            
+            if sample_text and st.button("Extract Entities"):
+                try:
+                    entities = analyzer.entity_extractor.extract_entities_from_text(sample_text)
+                    
+                    st.write("### Extracted Entities")
+                    for entity_type, entity_list in entities.items():
+                        if entity_list:
+                            st.write(f"**{entity_type.title()}:** {', '.join(entity_list)}")
+                    
+                    # Classify if it looks like a contributor name
+                    if any(word in sample_text.lower() for word in ['llc', 'inc', 'corp', 'pac']):
+                        classification = analyzer.entity_extractor.classify_contributor_type(sample_text)
+                        st.write(f"**Contributor Classification:** {classification}")
+                        
+                except Exception as e:
+                    st.error(f"Error analyzing text: {str(e)}")
+    
+    elif analysis_type == "Model Training & Fine-tuning":
+        st.subheader("Model Training & Fine-tuning")
+        st.info("Train custom models for campaign finance analysis")
+        
+        training_option = st.selectbox(
+            "Training Option",
+            ["View Available Models", "Train New Models", "Test Predictions"]
+        )
+        
+        if training_option == "View Available Models":
+            try:
+                model_info = analyzer.fine_tuner.get_model_info()
+                
+                st.write("### Available Models")
+                for category, models in model_info.items():
+                    if models:
+                        st.write(f"**{category.title()}:**")
+                        for model in models:
+                            st.write(f"  • {model}")
+                    else:
+                        st.write(f"**{category.title()}:** No models trained yet")
+                        
+            except Exception as e:
+                st.error(f"Error loading model info: {str(e)}")
+        
+        elif training_option == "Train New Models":
+            if st.button("Train All Models"):
+                with st.spinner("Training models... This may take a few minutes"):
+                    try:
+                        results = analyzer.fine_tuner.train_all_models()
+                        
+                        st.write("### Training Results")
+                        for result in results:
+                            if 'error' in result:
+                                st.error(f"**{result['task']}**: {result['error']}")
+                            else:
+                                st.success(f"**{result['task']} ({result['model_type']})**")
+                                col1, col2, col3 = st.columns(3)
+                                with col1:
+                                    st.metric("Train Score", f"{result['train_score']:.3f}")
+                                with col2:
+                                    st.metric("Test Score", f"{result['test_score']:.3f}")
+                                with col3:
+                                    st.metric("CV Score", f"{result['cv_mean']:.3f} ± {result['cv_std']:.3f}")
+                                
+                        st.info("Models saved to the models/ directory")
+                        
+                    except Exception as e:
+                        st.error(f"Error training models: {str(e)}")
+        
+        elif training_option == "Test Predictions":
+            task = st.selectbox(
+                "Select Task",
+                ["contributor_type_classification", "donation_size_prediction", "recipient_success_prediction"]
+            )
+            
+            if task == "contributor_type_classification":
+                test_name = st.text_input("Contributor Name", "Tech Solutions LLC")
+                test_occupation = st.text_input("Occupation", "CEO")
+                test_employer = st.text_input("Employer", "Technology Corporation")
+                
+                if st.button("Predict Contributor Type"):
+                    try:
+                        test_data = pd.DataFrame([{
+                            'text': f"{test_name} {test_occupation} {test_employer}",
+                            'num_contributions': 1,
+                            'total_amount': 1000,
+                            'avg_amount': 1000
+                        }])
+                        
+                        prediction = analyzer.fine_tuner.predict(task, test_data)
+                        st.write(f"**Predicted Type:** {prediction[0]}")
+                        
+                    except Exception as e:
+                        st.error(f"Error making prediction: {str(e)}")
 
 def show_natural_language_search_page():
     """Show natural language query interface."""

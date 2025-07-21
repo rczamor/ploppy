@@ -34,6 +34,9 @@ except ImportError:
     ADVANCED_NLP = False
     
 from .ai_embeddings import AdvancedEmbeddings, SemanticSearchEngine
+from .ai_time_series import ContributionForecaster
+from .ai_entity_extraction import EntityExtractor
+from .ai_fine_tuning import ModelFineTuner
 
 # Try to import modern sentence-transformers
 try:
@@ -55,6 +58,9 @@ class ContributionAnalyzer:
         self.doc2vec_model = None
         self.advanced_embeddings = AdvancedEmbeddings() if ADVANCED_NLP else None
         self.semantic_engine = SemanticSearchEngine() if ADVANCED_NLP else None
+        self.forecaster = ContributionForecaster()
+        self.entity_extractor = EntityExtractor()
+        self.fine_tuner = ModelFineTuner()
         
     def build_contributor_index(self):
         """Build searchable index of contributors using advanced embeddings."""
