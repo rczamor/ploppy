@@ -27,24 +27,29 @@ st.set_page_config(
 @st.cache_resource
 def init_database():
     """Initialize database connection."""
-    print("Initializing database connection...")
     try:
         db = NYCCFBDatabase()
-        print("Database connection successful!")
         return db
     except Exception as e:
-        print(f"Database connection failed: {e}")
         st.error(f"Failed to connect to database: {e}")
         raise
 
-# Load data from database
-@st.cache_data(ttl=300)  # Cache for 5 minutes
+# Load data from database with longer cache
+@st.cache_data(ttl=3600)  # Cache for 1 hour
 def load_database_stats():
     """Load database statistics."""
     db = init_database()
     return db.get_database_stats()
 
-@st.cache_data(ttl=300)
+# Cache database stats in session state
+def get_cached_stats():
+    """Get cached database stats from session state."""
+    if 'db_stats' not in st.session_state or st.session_state.get('stats_timestamp', 0) < datetime.now().timestamp() - 300:
+        st.session_state.db_stats = load_database_stats()
+        st.session_state.stats_timestamp = datetime.now().timestamp()
+    return st.session_state.db_stats
+
+@st.cache_data(ttl=900)  # Cache for 15 minutes
 def load_recent_contributions(limit=1000):
     """Load recent contributions from database."""
     db = init_database()
@@ -82,7 +87,7 @@ def load_recent_contributions(limit=1000):
     """
     return db.execute_query(query.replace(':limit', str(limit)))
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=1800)  # Cache for 30 minutes
 def load_top_contributors(limit=20):
     """Load top contributors by total amount."""
     db = init_database()
@@ -105,7 +110,7 @@ def load_top_contributors(limit=20):
     """
     return db.execute_query(query.replace(':limit', str(limit)))
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=1800)  # Cache for 30 minutes
 def load_top_recipients(limit=20):
     """Load top recipients by total raised."""
     db = init_database()
@@ -130,7 +135,7 @@ def load_top_recipients(limit=20):
     """
     return db.execute_query(query.replace(':limit', str(limit)))
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=1800)  # Cache for 30 minutes
 def load_office_summary():
     """Load summary by office type."""
     db = init_database()
@@ -152,40 +157,19 @@ def load_office_summary():
 
 # Main app
 def main():
-    print("Starting main function...")
     st.title("🏛️ NYC Campaign Finance Board Data Explorer")
     st.markdown("Explore political contributions data from the NYC Campaign Finance Board")
     
-    # Add a simple test to see if the app is rendering
-    st.success("✅ App is loading successfully!")
-    
-    # Test if database connection works
+    # Initialize database connection only once
     try:
-        db = init_database()
-        st.info("✅ Database connection established")
+        if 'db_initialized' not in st.session_state:
+            db = init_database()
+            st.session_state.db_initialized = True
     except Exception as e:
         st.error(f"❌ Database connection failed: {e}")
         return
     
-    print("App title displayed, checking import progress...")
-    # Show import progress if available
-    if os.path.exists('logs/import_progress.txt'):
-        with open('logs/import_progress.txt', 'r') as f:
-            progress_info = f.read()
-        
-        progress_container = st.container()
-        with progress_container:
-            with st.expander("📊 Background Import Progress", expanded=True):
-                col1, col2, col3 = st.columns([2, 1, 1])
-                with col1:
-                    st.code(progress_info)
-                with col2:
-                    st.info("🔄 Import running in background")
-                with col3:
-                    if st.button("🔄 Refresh"):
-                        st.rerun()
-    
-    # Sidebar
+    # Sidebar with lazy loading
     with st.sidebar:
         st.header("Navigation")
         page = st.selectbox(
@@ -193,27 +177,22 @@ def main():
             ["Overview", "Contributors", "Recipients", "Contributions", "Geographic Analysis", "AI Analysis", "Natural Language Search", "Graph Network Analysis", "Database Import"]
         )
         
-        st.markdown("---")
-        st.header("Database Status")
-        print("Loading database stats...")
-        try:
-            stats = load_database_stats()
-            print(f"Database stats loaded: {stats}")
-        except Exception as e:
-            print(f"Error loading database stats: {e}")
-            st.error("Failed to load database statistics")
-            stats = {}
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric("Elections", f"{stats.get('elections_count', 0):,}")
-            st.metric("Contributors", f"{stats.get('contributors_count', 0):,}")
-            st.metric("Recipients", f"{stats.get('recipients_count', 0):,}")
-            st.metric("Contributions", f"{stats.get('contributions_count', 0):,}")
-        with col2:
-            st.metric("Employers", f"{stats.get('employers_count', 0):,}")
-            st.metric("Locations", f"{stats.get('locations_count', 0):,}")
-            st.metric("Recent (30d)", f"{stats.get('recent_contributions', 0):,}")
+        # Only load stats if sidebar expander is opened
+        with st.expander("Database Status", expanded=False):
+            try:
+                stats = get_cached_stats()
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric("Elections", f"{stats.get('elections_count', 0):,}")
+                    st.metric("Contributors", f"{stats.get('contributors_count', 0):,}")
+                    st.metric("Recipients", f"{stats.get('recipients_count', 0):,}")
+                    st.metric("Contributions", f"{stats.get('contributions_count', 0):,}")
+                with col2:
+                    st.metric("Employers", f"{stats.get('employers_count', 0):,}")
+                    st.metric("Locations", f"{stats.get('locations_count', 0):,}")
+                    st.metric("Recent (30d)", f"{stats.get('recent_contributions', 0):,}")
+            except Exception as e:
+                st.error("Failed to load database statistics")
     
     # Page content
     if page == "Overview":
@@ -239,12 +218,10 @@ def show_overview_page():
     """Show overview dashboard."""
     st.header("Campaign Finance Overview")
     
-    # Load data
+    # Load data with error handling
     try:
         office_summary = load_office_summary()
-        print(f"Office summary type: {type(office_summary)}, empty: {office_summary.empty if hasattr(office_summary, 'empty') else 'N/A'}")
     except Exception as e:
-        print(f"Error loading office summary: {e}")
         st.error(f"Error loading data: {e}")
         office_summary = pd.DataFrame()
     
@@ -470,8 +447,8 @@ def show_contributions_page():
     """Show contributions analysis."""
     st.header("Contribution Patterns Analysis")
     
-    # Load recent contributions
-    recent_contributions = load_recent_contributions(5000)
+    # Load a smaller subset initially
+    recent_contributions = load_recent_contributions(1000)
     
     if not recent_contributions.empty:
         # Date range filter

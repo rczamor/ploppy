@@ -21,15 +21,12 @@ class NYCCFBDatabase:
         self.database_url = os.environ.get('DATABASE_URL')
         if not self.database_url:
             raise ValueError("DATABASE_URL environment variable not set")
-        print(f"Connecting to database...")
         try:
             self.engine = create_engine(self.database_url)
             # Test the connection
             with self.engine.connect() as conn:
                 conn.execute(text("SELECT 1"))
-            print("Database connection established successfully")
         except Exception as e:
-            print(f"Failed to connect to database: {e}")
             raise
         self.storage_client = None
     
@@ -40,10 +37,8 @@ class NYCCFBDatabase:
                 self.storage_client = ObjectStorageClient(bucket_id=bucket_id)
             else:
                 self.storage_client = ObjectStorageClient()
-            print(f"Connected to object storage bucket: {bucket_id}")
             return True
         except Exception as e:
-            print(f"Failed to connect to bucket: {e}")
             return False
     
     def normalize_name(self, name: str) -> str:
@@ -615,27 +610,39 @@ class NYCCFBDatabase:
         return results
     
     def get_database_stats(self) -> Dict:
-        """Get database statistics."""
+        """Get database statistics efficiently with a single query."""
         try:
             with self.engine.connect() as conn:
-                stats = {}
-                
-                # Count tables
-                tables = ['elections', 'contributors', 'recipients', 'contributions', 
-                         'employers', 'intermediaries', 'filings', 'locations']
-                for table in tables:
-                    result = conn.execute(text(f"SELECT COUNT(*) FROM {table}"))
-                    stats[f'{table}_count'] = result.fetchone()[0]
-                
-                # Get recent activity
+                # Single optimized query to get all stats
                 result = conn.execute(text("""
-                    SELECT COUNT(*) as recent_contributions
-                    FROM contributions 
-                    WHERE transaction_date >= CURRENT_DATE - INTERVAL '30 days'
+                    WITH counts AS (
+                        SELECT 
+                            (SELECT COUNT(*) FROM elections) as elections_count,
+                            (SELECT COUNT(*) FROM contributors) as contributors_count,
+                            (SELECT COUNT(*) FROM recipients) as recipients_count,
+                            (SELECT COUNT(*) FROM contributions) as contributions_count,
+                            (SELECT COUNT(*) FROM employers) as employers_count,
+                            (SELECT COUNT(*) FROM locations) as locations_count,
+                            (SELECT COUNT(*) FROM intermediaries) as intermediaries_count,
+                            (SELECT COUNT(*) FROM filings) as filings_count,
+                            (SELECT COUNT(*) FROM contributions 
+                             WHERE transaction_date >= CURRENT_DATE - INTERVAL '30 days') as recent_contributions
+                    )
+                    SELECT * FROM counts
                 """))
-                stats['recent_contributions'] = result.fetchone()[0]
                 
-                return stats
+                row = result.fetchone()
+                return {
+                    'elections_count': row[0],
+                    'contributors_count': row[1],
+                    'recipients_count': row[2],
+                    'contributions_count': row[3],
+                    'employers_count': row[4],
+                    'locations_count': row[5],
+                    'intermediaries_count': row[6],
+                    'filings_count': row[7],
+                    'recent_contributions': row[8]
+                }
         except Exception as e:
             return {'error': str(e)}
     
