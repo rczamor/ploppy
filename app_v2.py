@@ -652,7 +652,7 @@ def show_graph_network_page():
     
     # Import graph modules
     try:
-        from graph_nlp_query import GraphNLPQuery
+        from src.utils.graph_nlp_query import GraphNLPQuery
         nlp_query = GraphNLPQuery()
     except Exception as e:
         st.error(f"Failed to load graph query system: {str(e)}")
@@ -782,7 +782,7 @@ def show_graph_network_page():
     st.subheader("📊 Network Statistics")
     
     try:
-        from graph_analysis import PoliticalFinanceGraph
+        from src.utils.graph_analysis import PoliticalFinanceGraph
         with PoliticalFinanceGraph() as graph:
             stats = graph.get_network_statistics()
             
@@ -1049,7 +1049,7 @@ def show_ai_analysis_page():
         
         # Show which model is being used
         try:
-            from ai_search import MODERN_SEARCH_AVAILABLE
+            from src.ai.ai_search import MODERN_SEARCH_AVAILABLE
             if MODERN_SEARCH_AVAILABLE:
                 st.success("🚀 Using sentence-transformers (all-MiniLM-L6-v2) for modern semantic search")
             else:
