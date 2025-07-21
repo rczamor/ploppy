@@ -42,7 +42,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "streamlit run app_optimized.py --server.port 5000"
+args = "streamlit run ploppy.py --server.port 5000"
 waitForPort = 5000
 
 [[workflows.workflow]]
