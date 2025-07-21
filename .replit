@@ -32,10 +32,6 @@ args = "Import Expenditures"
 task = "workflow.run"
 args = "Import Intermediaries"
 
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "Test Streamlit"
-
 [[workflows.workflow]]
 name = "Streamlit App"
 author = "agent"
@@ -51,7 +47,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd /home/runner/workspace && python3 direct_import.py"
+args = "cd /home/runner/workspace && python3 scripts/direct_import.py"
 
 [[workflows.workflow]]
 name = "Import Expenditures"
@@ -59,7 +55,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd /home/runner/workspace && python3 import_expenditures.py"
+args = "cd /home/runner/workspace && python3 scripts/import_expenditures.py"
 
 [[workflows.workflow]]
 name = "Import Intermediaries"
@@ -67,16 +63,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd /home/runner/workspace && python3 import_intermediary_contributions.py"
-
-[[workflows.workflow]]
-name = "Test Streamlit"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "streamlit run test_streamlit.py --server.port 5001"
-waitForPort = 5001
+args = "cd /home/runner/workspace && python3 scripts/import_intermediary_contributions.py"
 
 [[ports]]
 localPort = 5000

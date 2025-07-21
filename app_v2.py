@@ -10,10 +10,10 @@ from plotly.subplots import make_subplots
 import os
 
 # Import custom modules
-from db_manager_v2 import NYCCFBDatabase
-from code_mappings import *
-from utils import format_currency
-from ai_search import ContributionAnalyzer, NaturalLanguageQueryProcessor
+from src.database.db_manager_v2 import NYCCFBDatabase
+from src.database.code_mappings import *
+from src.utils.utils import format_currency
+from src.ai.ai_search import ContributionAnalyzer, NaturalLanguageQueryProcessor
 
 # Page configuration
 st.set_page_config(

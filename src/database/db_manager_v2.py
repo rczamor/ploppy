@@ -10,7 +10,7 @@ import numpy as np
 import re
 from typing import Dict, List, Optional, Tuple
 from replit.object_storage import Client as ObjectStorageClient
-from code_mappings import *
+from .code_mappings import *
 import requests
 import json
 

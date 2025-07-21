@@ -10,8 +10,8 @@ from sklearn.ensemble import IsolationForest
 from sklearn.cluster import DBSCAN
 import re
 from typing import List, Dict, Tuple, Optional
-from db_manager_v2 import NYCCFBDatabase
-from code_mappings import parse_name, is_individual_name
+from ..database.db_manager_v2 import NYCCFBDatabase
+from ..database.code_mappings import parse_name, is_individual_name
 
 # Import advanced NLP libraries
 try:
@@ -33,11 +33,11 @@ try:
 except ImportError:
     ADVANCED_NLP = False
     
-from ai_embeddings import AdvancedEmbeddings, SemanticSearchEngine
+from .ai_embeddings import AdvancedEmbeddings, SemanticSearchEngine
 
 # Try to import modern sentence-transformers
 try:
-    from sentence_transformer_wrapper import sentence_transformer_wrapper
+    from .sentence_transformer_wrapper import sentence_transformer_wrapper
     MODERN_SEARCH_AVAILABLE = sentence_transformer_wrapper.available
 except ImportError:
     MODERN_SEARCH_AVAILABLE = False

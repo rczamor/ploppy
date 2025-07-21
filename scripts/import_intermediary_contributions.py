@@ -35,7 +35,9 @@ class IntermediaryContributionsImporter:
         
         # Load CSV
         print("\nLoading intermediary contributions CSV...")
-        from db_manager_v2 import NYCCFBDatabase
+        import sys
+        sys.path.append('..')
+        from src.database.db_manager_v2 import NYCCFBDatabase
         db = NYCCFBDatabase()
         db.connect_to_object_storage('')
         df = db.download_csv_to_dataframe('CFB_20250720195729674.csv')

@@ -11,7 +11,7 @@ from sklearn.preprocessing import normalize
 import pickle
 import os
 from typing import List, Dict, Tuple, Optional
-from db_manager_v2 import NYCCFBDatabase
+from ..database.db_manager_v2 import NYCCFBDatabase
 
 class AdvancedEmbeddings:
     """Advanced text embeddings using matrix factorization and topic modeling."""
