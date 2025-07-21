@@ -1,8 +1,8 @@
 Direct Import Progress
 ====================
-Imported: 99,997 new records
-Current total: 731,534
+Imported: 1,299,997 new records
+Current total: 1,931,534
 Target: 1,637,022
-Remaining: 905,488
-Progress: 44.7%
-Rate: 1714 records/sec
+Remaining: -294,512
+Progress: 118.0%
+Rate: 1450 records/sec
