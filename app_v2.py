@@ -27,7 +27,15 @@ st.set_page_config(
 @st.cache_resource
 def init_database():
     """Initialize database connection."""
-    return NYCCFBDatabase()
+    print("Initializing database connection...")
+    try:
+        db = NYCCFBDatabase()
+        print("Database connection successful!")
+        return db
+    except Exception as e:
+        print(f"Database connection failed: {e}")
+        st.error(f"Failed to connect to database: {e}")
+        raise
 
 # Load data from database
 @st.cache_data(ttl=300)  # Cache for 5 minutes
@@ -144,9 +152,22 @@ def load_office_summary():
 
 # Main app
 def main():
+    print("Starting main function...")
     st.title("🏛️ NYC Campaign Finance Board Data Explorer")
     st.markdown("Explore political contributions data from the NYC Campaign Finance Board")
     
+    # Add a simple test to see if the app is rendering
+    st.success("✅ App is loading successfully!")
+    
+    # Test if database connection works
+    try:
+        db = init_database()
+        st.info("✅ Database connection established")
+    except Exception as e:
+        st.error(f"❌ Database connection failed: {e}")
+        return
+    
+    print("App title displayed, checking import progress...")
     # Show import progress if available
     if os.path.exists('import_progress.txt'):
         with open('import_progress.txt', 'r') as f:
@@ -174,7 +195,14 @@ def main():
         
         st.markdown("---")
         st.header("Database Status")
-        stats = load_database_stats()
+        print("Loading database stats...")
+        try:
+            stats = load_database_stats()
+            print(f"Database stats loaded: {stats}")
+        except Exception as e:
+            print(f"Error loading database stats: {e}")
+            st.error("Failed to load database statistics")
+            stats = {}
         
         col1, col2 = st.columns(2)
         with col1:
@@ -212,7 +240,13 @@ def show_overview_page():
     st.header("Campaign Finance Overview")
     
     # Load data
-    office_summary = load_office_summary()
+    try:
+        office_summary = load_office_summary()
+        print(f"Office summary type: {type(office_summary)}, empty: {office_summary.empty if hasattr(office_summary, 'empty') else 'N/A'}")
+    except Exception as e:
+        print(f"Error loading office summary: {e}")
+        st.error(f"Error loading data: {e}")
+        office_summary = pd.DataFrame()
     
     if not office_summary.empty:
         # Office type summary

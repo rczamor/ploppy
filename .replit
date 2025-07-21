@@ -32,6 +32,10 @@ args = "Import Expenditures"
 task = "workflow.run"
 args = "Import Intermediaries"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Test Streamlit"
+
 [[workflows.workflow]]
 name = "Streamlit App"
 author = "agent"
@@ -65,9 +69,22 @@ author = "agent"
 task = "shell.exec"
 args = "cd /home/runner/workspace && python3 import_intermediary_contributions.py"
 
+[[workflows.workflow]]
+name = "Test Streamlit"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "streamlit run test_streamlit.py --server.port 5001"
+waitForPort = 5001
+
 [[ports]]
 localPort = 5000
 externalPort = 80
+
+[[ports]]
+localPort = 5001
+externalPort = 3000
 
 [objectStorage]
 defaultBucketID = "replit-objstore-000f835d-1f8c-4d74-9e63-000d4a7d878f"

@@ -19,7 +19,18 @@ class NYCCFBDatabase:
     
     def __init__(self):
         self.database_url = os.environ.get('DATABASE_URL')
-        self.engine = create_engine(self.database_url)
+        if not self.database_url:
+            raise ValueError("DATABASE_URL environment variable not set")
+        print(f"Connecting to database...")
+        try:
+            self.engine = create_engine(self.database_url)
+            # Test the connection
+            with self.engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+            print("Database connection established successfully")
+        except Exception as e:
+            print(f"Failed to connect to database: {e}")
+            raise
         self.storage_client = None
     
     def connect_to_object_storage(self, bucket_id: str = '') -> bool:
