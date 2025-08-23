@@ -1,7 +1,11 @@
 # NYC Campaign Finance Board Analysis System
 
 ## Project Overview
-This system analyzes NYC Campaign Finance Board (CFB) data, including political contributions, expenditures, intermediaries, and voter records. It provides sophisticated matching algorithms to identify voters who are also campaign contributors using geographic coordinates and fuzzy name matching.
+This system analyzes NYC Campaign Finance Board (CFB) data, including political contributions, expenditures, intermediaries, and voter records. Features advanced AI capabilities including semantic search, anomaly detection, predictive analytics, and network analysis.
+
+### AI Modernization Status (August 23, 2025)
+- **Phase 1 ✓**: TF-IDF embeddings, DBSCAN clustering, anomaly detection
+- **Phase 2 ✓**: Advanced NLP, network analysis, predictive modeling, enhanced matching
 
 ## Optimized Pipeline Architecture (August 23, 2025)
 
