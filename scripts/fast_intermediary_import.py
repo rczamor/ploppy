@@ -31,7 +31,7 @@ def main():
     print(f"{'='*80}\n")
     
     # Download CSV
-    filename = 'CFB_20250720195729674.csv'
+    filename = 'CFB_intermediaries-2025-08-23.csv'
     
     if USE_OBJECT_STORAGE:
         print(f"Downloading {filename} from object storage...")
@@ -143,10 +143,14 @@ def main():
                 if pd.isna(date_val):
                     date_val = None
                 
+                refno = clean_text(row.get('REFNO'))
+                if not refno:  # Skip records without REFNO
+                    continue
+                    
                 contributions_data.append((
-                    str(uuid.uuid4()),  # id
+                    refno,  # Use REFNO as unique identifier
                     intermediaries_cache.get(interm_name),  # intermediary_id
-                    clean_text(row.get('REFNO')),  # refno
+                    refno,  # refno
                     amount,  # amount
                     date_val,  # date
                     clean_text(row.get('NAME')),  # contributor name

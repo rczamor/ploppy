@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fast expenditure import script for NYC Campaign Finance data."""
+"""Fast expenditure import script for NYC Campaign Finance data with REFNO deduplication."""
 
 import psycopg2
 from psycopg2.extras import execute_values
@@ -25,13 +25,22 @@ def clean_text(text):
     text = str(text).strip()
     return text if text else None
 
+def parse_date(date_str):
+    """Parse date string to datetime."""
+    if pd.isna(date_str) or not date_str:
+        return None
+    try:
+        return pd.to_datetime(date_str, errors='coerce')
+    except:
+        return None
+
 def main():
     print(f"\n{'='*80}")
     print(f"FAST EXPENDITURE IMPORT - Started at {datetime.now()}")
     print(f"{'='*80}\n")
     
-    # Download CSV
-    filename = 'CFB_20250720195643912.csv'
+    # Download CSV (the intermediaries file actually has expenditure data with REFNO)
+    filename = 'CFB_intermediaries-2025-08-23.csv'
     
     if USE_OBJECT_STORAGE:
         print(f"Downloading {filename} from object storage...")
@@ -46,6 +55,19 @@ def main():
     
     print(f"Loaded {len(df):,} expenditure records from CSV")
     
+    # Filter records with REFNO
+    df_with_refno = df[df['REFNO'].notna()].copy()
+    print(f"Records with REFNO: {len(df_with_refno):,}")
+    
+    # Deduplicate by REFNO, keeping the first occurrence
+    df_dedup = df_with_refno.drop_duplicates(subset=['REFNO'], keep='first')
+    print(f"After deduplication: {len(df_dedup):,} unique REFNOs")
+    print(f"Duplicates removed: {len(df_with_refno) - len(df_dedup):,}")
+    
+    if len(df_dedup) == 0:
+        print("No records with REFNO to import!")
+        return
+    
     # Connect to database
     conn = psycopg2.connect(DATABASE_URL)
     conn.autocommit = False
@@ -57,88 +79,93 @@ def main():
         existing_count = cur.fetchone()[0]
         print(f"Existing expenditures: {existing_count:,}")
         
-        if existing_count >= len(df):
-            print("All expenditures already imported!")
+        # Get existing REFNOs for deduplication
+        cur.execute("SELECT reference_number FROM expenditures WHERE reference_number IS NOT NULL")
+        existing_refnos = set(row[0] for row in cur.fetchall())
+        print(f"Existing REFNOs: {len(existing_refnos):,}")
+        
+        # Filter out existing REFNOs
+        df_new = df_dedup[~df_dedup['REFNO'].isin(existing_refnos)]
+        print(f"New expenditures to import: {len(df_new):,}")
+        
+        if len(df_new) == 0:
+            print("No new expenditures to import!")
             return
         
-        # Clear and reimport
-        print("\nClearing existing expenditures for clean import...")
-        cur.execute("TRUNCATE TABLE expenditures CASCADE")
-        conn.commit()
-        
-        # Process in large batches
-        batch_size = 10000
-        total_batches = (len(df) + batch_size - 1) // batch_size
+        # Process in batches
+        batch_size = 5000
+        total_batches = (len(df_new) + batch_size - 1) // batch_size
         
         expenditures_data = []
         total_amount = Decimal('0')
+        imported_count = 0
         
-        print(f"\nProcessing {total_batches} batches of {batch_size} records...")
+        print(f"\nProcessing {total_batches} batches of up to {batch_size} records...")
         
         for batch_num in range(total_batches):
             start_idx = batch_num * batch_size
-            end_idx = min((batch_num + 1) * batch_size, len(df))
-            batch_df = df.iloc[start_idx:end_idx]
+            end_idx = min((batch_num + 1) * batch_size, len(df_new))
+            batch_df = df_new.iloc[start_idx:end_idx]
             
             for _, row in batch_df.iterrows():
+                refno = clean_text(row.get('REFNO'))
+                if not refno:
+                    continue
+                
+                # Parse amount
                 amount = Decimal(str(row.get('AMNT', 0))) if pd.notna(row.get('AMNT')) else Decimal('0')
                 total_amount += amount
                 
-                # Parse date
-                date_val = pd.to_datetime(row.get('DATE'), errors='coerce')
-                if pd.isna(date_val):
-                    date_val = None
-                
-                refund_date = pd.to_datetime(row.get('REFUNDDATE'), errors='coerce')
-                if pd.isna(refund_date):
-                    refund_date = None
-                
+                # Map CSV columns to database columns
                 expenditures_data.append((
                     str(uuid.uuid4()),  # id
-                    clean_text(row.get('REFNO')),  # reference_number
-                    clean_text(row.get('PAYEENAME')),  # payee_name
-                    clean_text(row.get('PURPOSECD')),  # purpose_code
-                    clean_text(row.get('PURPOSEDESC')),  # purpose_description
-                    date_val,  # expenditure_date
-                    refund_date,  # refund_date
-                    amount,  # amount
-                    clean_text(row.get('RECIPID')),  # recipient_id
-                    clean_text(row.get('RECIPNAME')),  # recipient_name
-                    clean_text(row.get('ELECTION')),  # election_cycle
+                    refno,  # reference_number (UNIQUE)
+                    None,  # election_id (will be linked later)
+                    None,  # recipient_id (will be linked later)
+                    int(row.get('FILING')) if pd.notna(row.get('FILING')) else None,  # filing_number
+                    clean_text(row.get('SCHEDULE')),  # schedule
+                    parse_date(row.get('INV_DATE')),  # invoice_date
+                    parse_date(row.get('DATE')),  # payment_date
+                    clean_text(row.get('NAME')),  # payee_name
+                    clean_text(row.get('C_CODE')),  # payee_type
+                    clean_text(row.get('ORG_IND')),  # organization_type
                     clean_text(row.get('CITY')),  # city
                     clean_text(row.get('STATE')),  # state
-                    clean_text(row.get('ZIP')),  # zip_code
+                    clean_text(row.get('ZIP')),  # zip
+                    clean_text(row.get('PAY_METHOD')),  # payment_method
+                    amount,  # amount
+                    clean_text(row.get('PURPOSECD')),  # purpose_code
+                    clean_text(row.get('PURPOSE')),  # purpose_description
+                    clean_text(row.get('EXPLAIN')),  # explanation
+                    clean_text(row.get('EXEMPTCD')),  # exemption_code
+                    row.get('RR_IND') == 'Y' if pd.notna(row.get('RR_IND')) else False,  # is_reimbursement
+                    row.get('SEG_IND') == 'Y' if pd.notna(row.get('SEG_IND')) else False,  # is_segregated
                     datetime.now(),  # created_at
                     datetime.now()  # updated_at
                 ))
             
             # Insert batch
-            if len(expenditures_data) >= batch_size:
-                execute_values(cur, """
-                    INSERT INTO expenditures 
-                    (id, reference_number, payee_name, purpose_code, purpose_description,
-                     expenditure_date, refund_date, amount, recipient_id, recipient_name,
-                     election_cycle, city, state, zip_code, created_at, updated_at)
-                    VALUES %s
-                    ON CONFLICT DO NOTHING
-                """, expenditures_data, page_size=1000)
-                
-                conn.commit()
-                print(f"  Batch {batch_num + 1}/{total_batches}: Inserted {len(expenditures_data):,} expenditures")
-                expenditures_data = []
-        
-        # Insert remaining
-        if expenditures_data:
-            execute_values(cur, """
-                INSERT INTO expenditures 
-                (id, reference_number, payee_name, purpose_code, purpose_description,
-                 expenditure_date, refund_date, amount, recipient_id, recipient_name,
-                 election_cycle, city, state, zip_code, created_at, updated_at)
-                VALUES %s
-                ON CONFLICT DO NOTHING
-            """, expenditures_data, page_size=1000)
-            conn.commit()
-            print(f"  Final batch: Inserted {len(expenditures_data):,} expenditures")
+            if len(expenditures_data) >= batch_size or batch_num == total_batches - 1:
+                if expenditures_data:
+                    execute_values(cur, """
+                        INSERT INTO expenditures 
+                        (id, reference_number, election_id, recipient_id, filing_number,
+                         schedule, invoice_date, payment_date, payee_name, payee_type,
+                         organization_type, city, state, zip, payment_method,
+                         amount, purpose_code, purpose_description, explanation,
+                         exemption_code, is_reimbursement, is_segregated, created_at, updated_at)
+                        VALUES %s
+                        ON CONFLICT (reference_number) DO UPDATE SET
+                            amount = EXCLUDED.amount,
+                            payee_name = EXCLUDED.payee_name,
+                            payment_date = EXCLUDED.payment_date,
+                            updated_at = EXCLUDED.updated_at
+                    """, expenditures_data, page_size=1000)
+                    
+                    imported_count += len(expenditures_data)
+                    conn.commit()
+                    print(f"  Batch {batch_num + 1}/{total_batches}: Imported {len(expenditures_data):,} expenditures (Total: {imported_count:,})")
+                    expenditures_data = []
         
         # Get final statistics
         cur.execute("SELECT COUNT(*), SUM(amount) FROM expenditures")
@@ -149,7 +176,9 @@ def main():
         print(f"{'='*80}")
         print(f"\nFinal Statistics:")
         print(f"  Total Expenditures: {final_count:,}")
-        print(f"  Total Amount: ${final_total:,.2f}")
+        print(f"  Total Amount: ${final_total:,.2f}" if final_total else "  Total Amount: $0.00")
+        print(f"  Newly Imported: {imported_count:,}")
+        print(f"  Deduplicated (skipped): {len(df_dedup) - len(df_new):,}")
         
     except Exception as e:
         conn.rollback()
