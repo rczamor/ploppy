@@ -3,9 +3,13 @@
 ## Project Overview
 This system analyzes NYC Campaign Finance Board (CFB) data, including political contributions, expenditures, intermediaries, and voter records. Features advanced AI capabilities including semantic search, anomaly detection, predictive analytics, and network analysis.
 
-### AI Modernization Status (August 23, 2025)
-- **Phase 1 ✓**: TF-IDF embeddings, DBSCAN clustering, anomaly detection
-- **Phase 2 ✓**: Advanced NLP, network analysis, predictive modeling, enhanced matching
+### AI Capabilities (August 23, 2025)
+- **Anomaly Detection**: Identifies unusual contribution patterns
+- **Semantic Search**: Natural language search across 10,000+ contributors
+- **Network Analysis**: Maps contributor-recipient relationships
+- **Predictive Analytics**: Forecasts future contributions and donor value
+- **Enhanced Matching**: Finds household networks and relationships
+- **NLP Features**: Sentiment analysis and entity extraction
 
 ## Optimized Pipeline Architecture (August 23, 2025)
 

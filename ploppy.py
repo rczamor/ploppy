@@ -18,7 +18,6 @@ import time
 from src.database.db_manager_v2 import NYCCFBDatabase
 from src.database.code_mappings import *
 from src.utils.utils import format_currency
-from src.ai.ai_unified import UnifiedAI
 from src.ai.ai_phase2 import Phase2AI
 
 # Page configuration with pig theme
@@ -710,19 +709,20 @@ def main():
     st.markdown("---")
     st.markdown("### 🤖 AI-Powered Analysis")
     
-    # Phase selection
-    ai_phase = st.radio("Select AI Version", ["Phase 1 (Basic)", "Phase 2 (Advanced)"], horizontal=True)
+    # Create tabs for different features
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["🔍 Anomalies", "🧠 Insights", "🕸️ Networks", "🔮 Predictions", "🔗 Matching"])
     
-    if ai_phase == "Phase 1 (Basic)":
-        col_ai1, col_ai2 = st.columns(2)
+    with tab1:
+        st.markdown("##### Anomaly Detection & Pattern Analysis")
         
-        with col_ai1:
-            if st.button("🔍 Find Anomalous Contributions", use_container_width=True):
-                with st.spinner("Analyzing patterns..."):
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("Find Anomalous Contributions", use_container_width=True):
+                with st.spinner("Analyzing..."):
                     try:
-                        ai = UnifiedAI()
+                        ai = Phase2AI()
                         ai.initialize()
-                        anomalies = ai.detect_anomalous_contributions(limit=10)
+                        anomalies = ai.base_ai.detect_anomalous_contributions(limit=10)
                         
                         if not anomalies.empty:
                             st.success(f"Found {len(anomalies)} anomalous contributions!")
@@ -731,36 +731,35 @@ def main():
                                 use_container_width=True
                             )
                         else:
-                            st.info("No anomalies detected in current data")
+                            st.info("No anomalies detected")
                     except Exception as e:
-                        st.error(f"Analysis error: {str(e)}")
+                        st.error(f"Error: {str(e)}")
         
-        with col_ai2:
-            if st.button("📊 Analyze Contribution Patterns", use_container_width=True):
-                with st.spinner("Analyzing patterns..."):
+        with col2:
+            if st.button("Analyze Contribution Patterns", use_container_width=True):
+                with st.spinner("Analyzing..."):
                     try:
-                        ai = UnifiedAI()
+                        ai = Phase2AI()
                         ai.initialize()
-                        patterns = ai.analyze_contribution_patterns()
+                        patterns = ai.base_ai.analyze_contribution_patterns()
                         
                         if patterns:
                             st.success("Pattern Analysis Complete!")
                             st.json(patterns)
                         else:
-                            st.info("No patterns found in current data")
+                            st.info("No patterns found")
                     except Exception as e:
-                        st.error(f"Analysis error: {str(e)}")
+                        st.error(f"Error: {str(e)}")
         
-        # Semantic Search
-        st.markdown("#### 🔎 Semantic Contributor Search")
-        ai_query = st.text_input("Search contributors using natural language (e.g., 'lawyers from Brooklyn')")
+        st.markdown("##### Semantic Search")
+        search_query = st.text_input("Search contributors using natural language")
         
-        if ai_query:
+        if search_query:
             with st.spinner("Searching..."):
                 try:
-                    ai = UnifiedAI()
+                    ai = Phase2AI()
                     ai.initialize()
-                    results = ai.search_contributors(ai_query, top_k=5)
+                    results = ai.base_ai.search_contributors(search_query, top_k=5)
                     
                     if not results.empty:
                         st.success(f"Found {len(results)} matching contributors!")
@@ -768,107 +767,103 @@ def main():
                     else:
                         st.info("No matching contributors found")
                 except Exception as e:
-                    st.error(f"Search error: {str(e)}")
+                    st.error(f"Error: {str(e)}")
     
-    else:  # Phase 2 (Advanced)
-        st.markdown("#### 🚀 Phase 2 Advanced Features")
+    with tab2:
+        st.markdown("##### Intelligent Insights")
+        if st.button("Generate AI Insights", use_container_width=True):
+            with st.spinner("Generating insights..."):
+                try:
+                    ai = Phase2AI()
+                    ai.initialize()
+                    insights = ai.generate_insights()
+                    
+                    if insights['key_findings']:
+                        st.success("Key Findings:")
+                        for finding in insights['key_findings']:
+                            st.write(f"• {finding}")
+                    
+                    if insights['alerts']:
+                        st.warning("Alerts:")
+                        for alert in insights['alerts']:
+                            st.write(f"⚠️ {alert}")
+                    
+                    if insights['recommendations']:
+                        st.info("Recommendations:")
+                        for rec in insights['recommendations']:
+                            st.write(f"💡 {rec}")
+                except Exception as e:
+                    st.error(f"Error: {str(e)}")
+    
+    with tab3:
+        st.markdown("##### Network Analysis")
+        if st.button("Analyze Contribution Networks", use_container_width=True):
+            with st.spinner("Building network..."):
+                try:
+                    ai = Phase2AI()
+                    ai.initialize()
+                    network_data = ai.build_contribution_network()
+                    
+                    if network_data.get('metrics'):
+                        st.success("Network Metrics:")
+                        metrics = network_data['metrics']
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("Nodes", metrics.get('num_nodes', 0))
+                        with col2:
+                            st.metric("Edges", metrics.get('num_edges', 0))
+                        with col3:
+                            st.metric("Communities", network_data.get('num_communities', 0))
+                    
+                    if network_data.get('influential_nodes'):
+                        st.info("Most Influential Nodes:")
+                        for node, score in network_data['influential_nodes'][:5]:
+                            st.write(f"• {node}: {score:.3f}")
+                except Exception as e:
+                    st.error(f"Error: {str(e)}")
+    
+    with tab4:
+        st.markdown("##### Predictive Analytics")
         
-        # Create tabs for different features
-        tab1, tab2, tab3, tab4 = st.tabs(["🧠 Insights", "🕸️ Networks", "🔮 Predictions", "🔗 Matching"])
-        
-        with tab1:
-            st.markdown("##### Intelligent Insights")
-            if st.button("Generate AI Insights", use_container_width=True):
-                with st.spinner("Generating insights..."):
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("Forecast Future Contributions", use_container_width=True):
+                with st.spinner("Generating forecast..."):
                     try:
                         ai = Phase2AI()
                         ai.initialize()
-                        insights = ai.generate_insights()
+                        forecast = ai.predict_future_contributions(periods=3)
                         
-                        if insights['key_findings']:
-                            st.success("Key Findings:")
-                            for finding in insights['key_findings']:
-                                st.write(f"• {finding}")
-                        
-                        if insights['alerts']:
-                            st.warning("Alerts:")
-                            for alert in insights['alerts']:
-                                st.write(f"⚠️ {alert}")
-                        
-                        if insights['recommendations']:
-                            st.info("Recommendations:")
-                            for rec in insights['recommendations']:
-                                st.write(f"💡 {rec}")
+                        if not forecast.empty:
+                            st.success("3-Month Forecast:")
+                            st.dataframe(forecast, use_container_width=True)
+                        else:
+                            st.info("Insufficient data for forecasting")
                     except Exception as e:
                         st.error(f"Error: {str(e)}")
         
-        with tab2:
-            st.markdown("##### Network Analysis")
-            if st.button("Analyze Contribution Networks", use_container_width=True):
-                with st.spinner("Building network..."):
-                    try:
-                        ai = Phase2AI()
-                        ai.initialize()
-                        network_data = ai.build_contribution_network()
-                        
-                        if network_data.get('metrics'):
-                            st.success("Network Metrics:")
-                            metrics = network_data['metrics']
-                            col1, col2, col3 = st.columns(3)
-                            with col1:
-                                st.metric("Nodes", metrics.get('num_nodes', 0))
-                            with col2:
-                                st.metric("Edges", metrics.get('num_edges', 0))
-                            with col3:
-                                st.metric("Communities", network_data.get('num_communities', 0))
-                        
-                        if network_data.get('influential_nodes'):
-                            st.info("Most Influential Nodes:")
-                            for node, score in network_data['influential_nodes'][:5]:
-                                st.write(f"• {node}: {score:.3f}")
-                    except Exception as e:
-                        st.error(f"Error: {str(e)}")
+        with col2:
+            st.markdown("**Predict Contributor Value**")
+            occ = st.text_input("Occupation", placeholder="e.g., Lawyer")
+            city = st.text_input("City", placeholder="e.g., Manhattan")
+            
+            if st.button("Predict Value", use_container_width=True):
+                try:
+                    ai = Phase2AI()
+                    prediction = ai.predict_contributor_value({
+                        'occupation': occ,
+                        'city': city
+                    })
+                    st.success("Prediction:")
+                    st.json(prediction)
+                except Exception as e:
+                    st.error(f"Error: {str(e)}")
+    
+    with tab5:
+        st.markdown("##### Enhanced Matching & Relationships")
         
-        with tab3:
-            st.markdown("##### Predictive Analytics")
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("Forecast Future Contributions", use_container_width=True):
-                    with st.spinner("Generating forecast..."):
-                        try:
-                            ai = Phase2AI()
-                            ai.initialize()
-                            forecast = ai.predict_future_contributions(periods=3)
-                            
-                            if not forecast.empty:
-                                st.success("3-Month Forecast:")
-                                st.dataframe(forecast, use_container_width=True)
-                            else:
-                                st.info("Insufficient data for forecasting")
-                        except Exception as e:
-                            st.error(f"Error: {str(e)}")
-            
-            with col2:
-                st.markdown("**Predict Contributor Value**")
-                occ = st.text_input("Occupation", placeholder="e.g., Lawyer")
-                city = st.text_input("City", placeholder="e.g., Manhattan")
-                
-                if st.button("Predict Value", use_container_width=True):
-                    try:
-                        ai = Phase2AI()
-                        prediction = ai.predict_contributor_value({
-                            'occupation': occ,
-                            'city': city
-                        })
-                        st.success("Prediction:")
-                        st.json(prediction)
-                    except Exception as e:
-                        st.error(f"Error: {str(e)}")
-        
-        with tab4:
-            st.markdown("##### Enhanced Matching")
-            
+        col1, col2 = st.columns(2)
+        with col1:
             if st.button("Find Household Networks", use_container_width=True):
                 with st.spinner("Analyzing households..."):
                     try:
@@ -884,7 +879,8 @@ def main():
                             st.info("No household networks found")
                     except Exception as e:
                         st.error(f"Error: {str(e)}")
-            
+        
+        with col2:
             if st.button("Analyze Relationships", use_container_width=True):
                 with st.spinner("Analyzing relationships..."):
                     try:
