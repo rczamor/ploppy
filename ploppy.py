@@ -18,7 +18,7 @@ import time
 from src.database.db_manager_v2 import NYCCFBDatabase
 from src.database.code_mappings import *
 from src.utils.utils import format_currency
-from src.ai.ai_search import ContributionAnalyzer, NaturalLanguageQueryProcessor
+from src.ai.ai_unified import UnifiedAI
 
 # Page configuration with pig theme
 st.set_page_config(
@@ -704,6 +704,66 @@ def main():
             </ul>
         </div>
         """, unsafe_allow_html=True)
+    
+    # AI Analysis Section
+    st.markdown("---")
+    st.markdown("### 🤖 AI-Powered Analysis")
+    
+    col_ai1, col_ai2 = st.columns(2)
+    
+    with col_ai1:
+        if st.button("🔍 Find Anomalous Contributions", use_container_width=True):
+            with st.spinner("Analyzing patterns..."):
+                try:
+                    ai = UnifiedAI()
+                    ai.initialize()
+                    anomalies = ai.detect_anomalous_contributions(limit=10)
+                    
+                    if not anomalies.empty:
+                        st.success(f"Found {len(anomalies)} anomalous contributions!")
+                        st.dataframe(
+                            anomalies[['amount', 'anomaly_score']].head(10),
+                            use_container_width=True
+                        )
+                    else:
+                        st.info("No anomalies detected in current data")
+                except Exception as e:
+                    st.error(f"Analysis error: {str(e)}")
+    
+    with col_ai2:
+        if st.button("📊 Analyze Contribution Patterns", use_container_width=True):
+            with st.spinner("Analyzing patterns..."):
+                try:
+                    ai = UnifiedAI()
+                    ai.initialize()
+                    patterns = ai.analyze_contribution_patterns()
+                    
+                    if patterns:
+                        st.success("Pattern Analysis Complete!")
+                        st.json(patterns)
+                    else:
+                        st.info("No patterns found in current data")
+                except Exception as e:
+                    st.error(f"Analysis error: {str(e)}")
+    
+    # Semantic Search
+    st.markdown("#### 🔎 Semantic Contributor Search")
+    ai_query = st.text_input("Search contributors using natural language (e.g., 'lawyers from Brooklyn')")
+    
+    if ai_query:
+        with st.spinner("Searching..."):
+            try:
+                ai = UnifiedAI()
+                ai.initialize()
+                results = ai.search_contributors(ai_query, top_k=5)
+                
+                if not results.empty:
+                    st.success(f"Found {len(results)} matching contributors!")
+                    st.dataframe(results, use_container_width=True)
+                else:
+                    st.info("No matching contributors found")
+            except Exception as e:
+                st.error(f"Search error: {str(e)}")
     
     # Footer
     st.markdown("""
