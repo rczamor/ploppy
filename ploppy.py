@@ -216,12 +216,26 @@ def get_key_stats():
     """
     recent = db.execute_query(query_recent)
     
+    # Ensure no None values in the return dictionary
+    total_amount_result = db.execute_query("SELECT SUM(amount) FROM contributions")
+    total_amount = total_amount_result.iloc[0, 0] if not total_amount_result.empty else 0
+    total_amount = total_amount if total_amount is not None else 0
+    
+    today_count = 0
+    today_amount = 0
+    if not recent.empty:
+        today_count = recent['today_count'].iloc[0]
+        today_amount = recent['today_amount'].iloc[0]
+        # Handle None values
+        today_count = today_count if today_count is not None else 0
+        today_amount = today_amount if today_amount is not None else 0
+    
     return {
         'total_contributions': stats.get('contributions_count', 0),
-        'total_amount': db.execute_query("SELECT SUM(amount) FROM contributions").iloc[0, 0] or 0,
+        'total_amount': total_amount,
         'unique_contributors': stats.get('contributors_count', 0),
-        'today_contributions': recent['today_count'].iloc[0] if not recent.empty else 0,
-        'today_amount': recent['today_amount'].iloc[0] if not recent.empty else 0
+        'today_contributions': today_count,
+        'today_amount': today_amount
     }
 
 # Main search function
@@ -482,8 +496,8 @@ def main():
         st.markdown('<div class="metric-card">', unsafe_allow_html=True)
         st.metric(
             "Total Contributions", 
-            f"{stats['total_contributions']:,}",
-            delta=f"+{stats['today_contributions']} today"
+            f"{stats.get('total_contributions', 0):,}",
+            delta=f"+{stats.get('today_contributions', 0)} today"
         )
         st.markdown('</div>', unsafe_allow_html=True)
     
@@ -491,8 +505,8 @@ def main():
         st.markdown('<div class="metric-card">', unsafe_allow_html=True)
         st.metric(
             "Total Amount", 
-            f"${stats['total_amount']:,.0f}",
-            delta=f"+${stats['today_amount']:,.0f} today"
+            f"${stats.get('total_amount', 0) or 0:,.0f}",
+            delta=f"+${stats.get('today_amount', 0) or 0:,.0f} today"
         )
         st.markdown('</div>', unsafe_allow_html=True)
     
@@ -500,13 +514,13 @@ def main():
         st.markdown('<div class="metric-card">', unsafe_allow_html=True)
         st.metric(
             "Unique Contributors", 
-            f"{stats['unique_contributors']:,}"
+            f"{stats.get('unique_contributors', 0):,}"
         )
         st.markdown('</div>', unsafe_allow_html=True)
     
     with col4:
         st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-        avg_contribution = stats['total_amount'] / max(stats['total_contributions'], 1)
+        avg_contribution = (stats.get('total_amount', 0) or 0) / max(stats.get('total_contributions', 1), 1)
         st.metric(
             "Average Contribution", 
             f"${avg_contribution:,.0f}"
