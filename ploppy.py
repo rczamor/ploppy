@@ -248,30 +248,23 @@ def search_contributions(query=None, filters=None, limit=100, offset=0):
     base_query = """
         SELECT 
             c.id,
-            c.transaction_date,
+            c.date as transaction_date,
             c.amount,
             c.payment_method_desc as payment_method,
-            contrib.last_name || CASE 
-                WHEN contrib.first_name != '' THEN ', ' || contrib.first_name 
-                ELSE '' 
-            END as contributor,
+            COALESCE(contrib.full_name, c.str_name) as contributor,
             contrib.contributor_type,
-            r.last_name || CASE 
-                WHEN r.first_name != '' THEN ', ' || r.first_name 
-                ELSE '' 
-            END as recipient,
+            COALESCE(r.full_name, r.last_name || ', ' || r.first_name) as recipient,
             r.office_name as office,
             r.party,
-            l.city,
-            l.state,
-            l.borough_name as borough,
+            COALESCE(contrib.city, c.contributor_city) as city,
+            COALESCE(contrib.state, c.contributor_state) as state,
+            r.borough as borough,
             e.name as employer
         FROM contributions c
-        JOIN contributors contrib ON c.contributor_id = contrib.id
-        JOIN recipients r ON c.recipient_id = r.id
-        LEFT JOIN locations l ON c.location_id = l.id
-        LEFT JOIN employers e ON contrib.employer_id = e.id
-        WHERE 1=1
+        LEFT JOIN contributors contrib ON c.contributor_id = contrib.id
+        LEFT JOIN recipients r ON c.recipient_id = r.id
+        LEFT JOIN employers e ON c.employer_id = e.id
+        WHERE c.amount IS NOT NULL
     """
     
     # Apply filters
@@ -279,9 +272,9 @@ def search_contributions(query=None, filters=None, limit=100, offset=0):
     
     if filters:
         if filters.get('date_from'):
-            conditions.append(f"c.transaction_date >= '{filters['date_from']}'")
+            conditions.append(f"c.date >= '{filters['date_from']}'")
         if filters.get('date_to'):
-            conditions.append(f"c.transaction_date <= '{filters['date_to']}'")
+            conditions.append(f"c.date <= '{filters['date_to']}'")
         if filters.get('min_amount'):
             conditions.append(f"c.amount >= {filters['min_amount']}")
         if filters.get('max_amount'):
@@ -289,7 +282,7 @@ def search_contributions(query=None, filters=None, limit=100, offset=0):
         if filters.get('party'):
             conditions.append(f"r.party = '{filters['party']}'")
         if filters.get('borough'):
-            conditions.append(f"l.borough_name = '{filters['borough']}'")
+            conditions.append(f"r.borough = '{filters['borough']}'")
         if filters.get('office'):
             conditions.append(f"r.office_name = '{filters['office']}'")
     
@@ -297,7 +290,7 @@ def search_contributions(query=None, filters=None, limit=100, offset=0):
         base_query += " AND " + " AND ".join(conditions)
     
     # Add ordering and limit
-    base_query += f" ORDER BY c.transaction_date DESC LIMIT {limit} OFFSET {offset}"
+    base_query += f" ORDER BY c.date DESC NULLS LAST LIMIT {limit} OFFSET {offset}"
     
     return db.execute_query(base_query)
 

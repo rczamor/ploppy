@@ -1,0 +1,27 @@
+Exception: Query failed: (psycopg2.errors.UndefinedTable) relation "locations" does not exist LINE 25: LEFT JOIN locations l ON c.location_id = l.id ^ [SQL: SELECT c.id, c.transaction_date, c.amount, c.payment_method_desc as payment_method, contrib.last_name || CASE WHEN contrib.first_name != '' THEN ', ' || contrib.first_name ELSE '' END as contributor, contrib.contributor_type, r.last_name || CASE WHEN r.first_name != '' THEN ', ' || r.first_name ELSE '' END as recipient, r.office_name as office, r.party, l.city, l.state, l.borough_name as borough, e.name as employer FROM contributions c JOIN contributors contrib ON c.contributor_id = contrib.id JOIN recipients r ON c.recipient_id = r.id LEFT JOIN locations l ON c.location_id = l.id LEFT JOIN employers e ON contrib.employer_id = e.id WHERE 1=1 ORDER BY c.transaction_date DESC LIMIT 100 OFFSET 0] (Background on this error at: https://sqlalche.me/e/20/f405)
+Traceback:
+File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/streamlit/runtime/scriptrunner/exec_code.py", line 128, in exec_func_with_error_handling
+    result = func()
+             ^^^^^^
+File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/streamlit/runtime/scriptrunner/script_runner.py", line 669, in code_to_exec
+    exec(code, module.__dict__)  # noqa: S102
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+File "/home/runner/workspace/ploppy.py", line 983, in <module>
+    main()
+File "/home/runner/workspace/ploppy.py", line 604, in main
+    results = search_contributions(
+              ^^^^^^^^^^^^^^^^^^^^^
+File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/streamlit/runtime/caching/cache_utils.py", line 225, in __call__
+    return self._get_or_create_cached_value(args, kwargs, spinner_message)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/streamlit/runtime/caching/cache_utils.py", line 267, in _get_or_create_cached_value
+    return self._handle_cache_miss(cache, value_key, func_args, func_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+File "/home/runner/workspace/.pythonlibs/lib/python3.11/site-packages/streamlit/runtime/caching/cache_utils.py", line 326, in _handle_cache_miss
+    computed_value = self._info.func(*func_args, **func_kwargs)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+File "/home/runner/workspace/ploppy.py", line 302, in search_contributions
+    return db.execute_query(base_query)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+File "/home/runner/workspace/src/database/db_manager_v2.py", line 657, in execute_query
+    raise Exception(f"Query failed: {str(e)}")
