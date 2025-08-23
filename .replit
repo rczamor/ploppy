@@ -22,22 +22,6 @@ args = "Streamlit App"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "Direct Import"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "Import Expenditures"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "Import Intermediaries"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "Test Streamlit"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
 args = "Fast Voter Import"
 
 [[workflows.workflow]]
@@ -48,39 +32,6 @@ author = "agent"
 task = "shell.exec"
 args = "streamlit run ploppy.py --server.port 5000"
 waitForPort = 5000
-
-[[workflows.workflow]]
-name = "Direct Import"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd /home/runner/workspace && python3 scripts/direct_import.py"
-
-[[workflows.workflow]]
-name = "Import Expenditures"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd /home/runner/workspace && PYTHONPATH=/home/runner/workspace python3 scripts/import_expenditures.py"
-
-[[workflows.workflow]]
-name = "Import Intermediaries"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd /home/runner/workspace && PYTHONPATH=/home/runner/workspace python3 scripts/import_intermediary_contributions.py"
-
-[[workflows.workflow]]
-name = "Test Streamlit"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "streamlit run test_app.py --server.port 5001"
-waitForPort = 5001
 
 [[workflows.workflow]]
 name = "Fast Voter Import"
