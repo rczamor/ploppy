@@ -18,7 +18,7 @@ import time
 from src.database.db_manager_v2 import NYCCFBDatabase
 from src.database.code_mappings import *
 from src.utils.utils import format_currency
-from src.ai.ai_phase2 import Phase2AI
+from src.ai.ai_phase3 import Phase3AI
 
 # Page configuration with pig theme
 st.set_page_config(
@@ -720,7 +720,7 @@ def main():
             if st.button("Find Anomalous Contributions", use_container_width=True):
                 with st.spinner("Analyzing..."):
                     try:
-                        ai = Phase2AI()
+                        ai = Phase3AI()
                         ai.initialize()
                         anomalies = ai.base_ai.detect_anomalous_contributions(limit=10)
                         
@@ -739,7 +739,7 @@ def main():
             if st.button("Analyze Contribution Patterns", use_container_width=True):
                 with st.spinner("Analyzing..."):
                     try:
-                        ai = Phase2AI()
+                        ai = Phase3AI()
                         ai.initialize()
                         patterns = ai.base_ai.analyze_contribution_patterns()
                         
@@ -751,76 +751,139 @@ def main():
                     except Exception as e:
                         st.error(f"Error: {str(e)}")
         
-        st.markdown("##### Semantic Search")
-        search_query = st.text_input("Search contributors using natural language")
+        st.markdown("##### PGVector Semantic Search")
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            search_query = st.text_input("Search contributors using natural language")
+        with col2:
+            if st.button("Index Contributors", help="Index contributors into PGVector for faster search"):
+                with st.spinner("Indexing..."):
+                    try:
+                        ai = Phase3AI()
+                        ai.initialize()
+                        count = ai.index_contributors(limit=100)
+                        st.success(f"✓ Indexed {count} contributors")
+                    except Exception as e:
+                        st.error(f"Error: {str(e)}")
         
         if search_query:
-            with st.spinner("Searching..."):
+            with st.spinner("Searching with PGVector..."):
                 try:
-                    ai = Phase2AI()
+                    ai = Phase3AI()
                     ai.initialize()
-                    results = ai.base_ai.search_contributors(search_query, top_k=5)
+                    # Use PGVector semantic search
+                    results = ai.semantic_search_pgvector(search_query, top_k=5)
                     
                     if not results.empty:
                         st.success(f"Found {len(results)} matching contributors!")
-                        st.dataframe(results, use_container_width=True)
+                        # Display with similarity scores
+                        display_df = results[['name', 'city', 'state', 'total', 'similarity']].copy()
+                        display_df['similarity'] = display_df['similarity'].apply(lambda x: f"{x:.3f}")
+                        display_df['total'] = display_df['total'].apply(lambda x: f"${x:,.0f}" if x else "$0")
+                        st.dataframe(display_df, use_container_width=True)
                     else:
-                        st.info("No matching contributors found")
+                        # Fallback to regular search
+                        results = ai.base_ai.search_contributors(search_query, top_k=5)
+                        if not results.empty:
+                            st.success(f"Found {len(results)} matching contributors!")
+                            st.dataframe(results, use_container_width=True)
+                        else:
+                            st.info("No matching contributors found")
                 except Exception as e:
                     st.error(f"Error: {str(e)}")
     
     with tab2:
-        st.markdown("##### Intelligent Insights")
-        if st.button("Generate AI Insights", use_container_width=True):
-            with st.spinner("Generating insights..."):
-                try:
-                    ai = Phase2AI()
-                    ai.initialize()
-                    insights = ai.generate_insights()
-                    
-                    if insights['key_findings']:
-                        st.success("Key Findings:")
-                        for finding in insights['key_findings']:
-                            st.write(f"• {finding}")
-                    
-                    if insights['alerts']:
-                        st.warning("Alerts:")
-                        for alert in insights['alerts']:
-                            st.write(f"⚠️ {alert}")
-                    
-                    if insights['recommendations']:
-                        st.info("Recommendations:")
-                        for rec in insights['recommendations']:
-                            st.write(f"💡 {rec}")
-                except Exception as e:
-                    st.error(f"Error: {str(e)}")
+        st.markdown("##### Intelligent Insights & Knowledge Graph")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("Generate AI Insights", use_container_width=True):
+                with st.spinner("Generating insights..."):
+                    try:
+                        ai = Phase3AI()
+                        ai.initialize()
+                        insights = ai.generate_insights()
+                        
+                        if insights['key_findings']:
+                            st.success("Key Findings:")
+                            for finding in insights['key_findings']:
+                                st.write(f"• {finding}")
+                        
+                        if insights['alerts']:
+                            st.warning("Alerts:")
+                            for alert in insights['alerts']:
+                                st.write(f"⚠️ {alert}")
+                        
+                        if insights['recommendations']:
+                            st.info("Recommendations:")
+                            for rec in insights['recommendations']:
+                                st.write(f"💡 {rec}")
+                    except Exception as e:
+                        st.error(f"Error: {str(e)}")
+        
+        with col2:
+            if st.button("Build Knowledge Graph", use_container_width=True):
+                with st.spinner("Building knowledge graph..."):
+                    try:
+                        ai = Phase3AI()
+                        ai.initialize()
+                        kg_stats = ai.build_knowledge_graph(limit=100)
+                        st.success("Knowledge Graph Built!")
+                        st.metric("Relations Added", kg_stats['relations_added'])
+                        st.metric("Total Relations", kg_stats['total_relations'])
+                        if kg_stats.get('types'):
+                            st.write("Relation Types:")
+                            for rel_type, count in kg_stats['types'].items():
+                                st.write(f"• {rel_type}: {count}")
+                    except Exception as e:
+                        st.error(f"Error: {str(e)}")
     
     with tab3:
-        st.markdown("##### Network Analysis")
-        if st.button("Analyze Contribution Networks", use_container_width=True):
-            with st.spinner("Building network..."):
-                try:
-                    ai = Phase2AI()
-                    ai.initialize()
-                    network_data = ai.build_contribution_network()
-                    
-                    if network_data.get('metrics'):
-                        st.success("Network Metrics:")
-                        metrics = network_data['metrics']
-                        col1, col2, col3 = st.columns(3)
-                        with col1:
-                            st.metric("Nodes", metrics.get('num_nodes', 0))
-                        with col2:
-                            st.metric("Edges", metrics.get('num_edges', 0))
-                        with col3:
-                            st.metric("Communities", network_data.get('num_communities', 0))
-                    
-                    if network_data.get('influential_nodes'):
-                        st.info("Most Influential Nodes:")
-                        for node, score in network_data['influential_nodes'][:5]:
-                            st.write(f"• {node}: {score:.3f}")
-                except Exception as e:
-                    st.error(f"Error: {str(e)}")
+        st.markdown("##### Network Analysis & Vector Clustering")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("Analyze Contribution Networks", use_container_width=True):
+                with st.spinner("Building network..."):
+                    try:
+                        ai = Phase3AI()
+                        ai.initialize()
+                        network_data = ai.build_contribution_network()
+                        
+                        if network_data.get('metrics'):
+                            st.success("Network Metrics:")
+                            metrics = network_data['metrics']
+                            c1, c2, c3 = st.columns(3)
+                            with c1:
+                                st.metric("Nodes", metrics.get('num_nodes', 0))
+                            with c2:
+                                st.metric("Edges", metrics.get('num_edges', 0))
+                            with c3:
+                                st.metric("Communities", network_data.get('num_communities', 0))
+                        
+                        if network_data.get('influential_nodes'):
+                            st.info("Most Influential Nodes:")
+                            for node, score in network_data['influential_nodes'][:5]:
+                                st.write(f"• {node}: {score:.3f}")
+                    except Exception as e:
+                        st.error(f"Error: {str(e)}")
+        
+        with col2:
+            if st.button("Cluster with PGVector", use_container_width=True):
+                with st.spinner("Clustering entities..."):
+                    try:
+                        ai = Phase3AI()
+                        ai.initialize()
+                        cluster_data = ai.cluster_entities(entity_type='contributor', min_cluster_size=3)
+                        
+                        if cluster_data['clusters']:
+                            st.success(f"Found {len(cluster_data['clusters'])} clusters!")
+                            if not cluster_data['statistics'].empty:
+                                st.dataframe(cluster_data['statistics'], use_container_width=True)
+                        else:
+                            st.info("No clusters found")
+                    except Exception as e:
+                        st.error(f"Error: {str(e)}")
     
     with tab4:
         st.markdown("##### Predictive Analytics")
@@ -830,7 +893,7 @@ def main():
             if st.button("Forecast Future Contributions", use_container_width=True):
                 with st.spinner("Generating forecast..."):
                     try:
-                        ai = Phase2AI()
+                        ai = Phase3AI()
                         ai.initialize()
                         forecast = ai.predict_future_contributions(periods=3)
                         
@@ -849,7 +912,7 @@ def main():
             
             if st.button("Predict Value", use_container_width=True):
                 try:
-                    ai = Phase2AI()
+                    ai = Phase3AI()
                     prediction = ai.predict_contributor_value({
                         'occupation': occ,
                         'city': city
@@ -867,7 +930,7 @@ def main():
             if st.button("Find Household Networks", use_container_width=True):
                 with st.spinner("Analyzing households..."):
                     try:
-                        ai = Phase2AI()
+                        ai = Phase3AI()
                         ai.initialize()
                         households = ai.find_household_networks()
                         
@@ -881,19 +944,30 @@ def main():
                         st.error(f"Error: {str(e)}")
         
         with col2:
-            if st.button("Analyze Relationships", use_container_width=True):
-                with st.spinner("Analyzing relationships..."):
+            if st.button("Find Similar Contributors", use_container_width=True):
+                contributor_id = st.text_input("Enter contributor ID", value="1")
+                with st.spinner("Finding similar contributors..."):
                     try:
-                        ai = Phase2AI()
+                        ai = Phase3AI()
                         ai.initialize()
-                        relationships = ai.analyze_relationships()
+                        similar = ai.find_similar_entities(
+                            entity_id=contributor_id,
+                            entity_type='contributor',
+                            k=5
+                        )
                         
-                        if relationships:
-                            st.success(f"Found {len(relationships)} relationships")
-                            for rel in relationships[:5]:
-                                st.write(f"• {rel['type']}: {rel.get('num_members', len(rel.get('members', [])))} members")
+                        if not similar.empty:
+                            st.success(f"Found {len(similar)} similar contributors")
+                            st.dataframe(similar[['name', 'city', 'similarity']].head(5), use_container_width=True)
                         else:
-                            st.info("No relationships found")
+                            # Fallback to relationship analysis
+                            relationships = ai.analyze_relationships()
+                            if relationships:
+                                st.success(f"Found {len(relationships)} relationships")
+                                for rel in relationships[:5]:
+                                    st.write(f"• {rel['type']}: {rel.get('num_members', len(rel.get('members', [])))} members")
+                            else:
+                                st.info("No similar contributors found")
                     except Exception as e:
                         st.error(f"Error: {str(e)}")
     
