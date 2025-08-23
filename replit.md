@@ -1,154 +1,95 @@
-# NYC Campaign Finance Board Data Explorer
+# NYC Campaign Finance Board Analysis System
 
 ## Project Overview
-An advanced AI-powered platform for comprehensive NYC campaign finance data analysis, leveraging machine learning and big data techniques to provide deep insights into political contribution dynamics.
+This system analyzes NYC Campaign Finance Board (CFB) data, including political contributions, expenditures, and now voter contact records. It provides comprehensive analysis tools for understanding campaign finance patterns and matching voter records with contributor data.
 
-### Key Technologies
-- **Frontend**: Streamlit for interactive web interface
-- **Database**: PostgreSQL for large-scale data storage
-- **Backend**: Python for advanced data processing
-- **ORM**: SQLAlchemy for database interactions
-- **Analytics**: Pandas and scikit-learn
-- **AI Integration**: OpenAI for intelligent insights
+## Recent Updates (August 23, 2025)
 
-## Project Structure
-```
-.
-├── app_v2.py                    # Main Streamlit application
-├── src/                         # Source code modules
-│   ├── database/                # Database management
-│   │   ├── db_manager_v2.py     # Database operations
-│   │   ├── code_mappings.py     # Data mappings and utilities
-│   │   └── schema_update.sql    # Database schema updates
-│   ├── ai/                      # AI/ML modules
-│   │   ├── ai_search.py         # AI-powered search and analysis
-│   │   ├── ai_embeddings.py     # Advanced text embeddings
-│   │   ├── ai_time_series.py    # Time series forecasting
-│   │   ├── ai_entity_extraction.py # Entity extraction & NLP
-│   │   ├── ai_fine_tuning.py    # Model training & fine-tuning
-│   │   ├── ai_analyzer.py       # Data analysis
-│   │   ├── sentence_transformer_wrapper.py # Sentence transformers integration
-│   │   └── ai_sentence_transformers.py
-│   └── utils/                   # Utility modules
-│       ├── utils.py             # General utilities
-│       ├── visualizations.py    # Data visualizations
-│       ├── compliance_checker.py # Compliance checking
-│       ├── data_processor.py    # Data processing
-│       ├── ml_clustering.py     # ML clustering
-│       └── graph_analysis.py    # Graph analysis
-├── scripts/                     # Import and maintenance scripts
-│   ├── direct_import.py         # Direct data import
-│   ├── import_expenditures.py   # Expenditure import
-│   ├── import_intermediary_contributions.py
-│   └── monitor_all_imports.py   # Import monitoring
-├── logs/                        # Log files
-│   ├── import_progress.txt      # Import progress tracking
-│   └── expenditures_import_progress.txt
-└── archive/                     # Deprecated/old files
+### Voter Data Integration
+- **New Feature**: Voter-Contributor Matching System
+  - Created `voters` table in database to store voter contact information
+  - Imported voter data from Kings County Republican voter file
+  - Built sophisticated matching algorithm to identify voters who are also campaign contributors
+  - Implements fuzzy name matching and address verification
+  - Calculates match probability scores based on multiple factors
 
-```
+### Database Schema
+Added `voters` table with comprehensive fields:
+- Personal information (name, gender)
+- Address details (full address with normalization)
+- Party affiliation data
+- Contact information (phone numbers)
+- Unique voter IDs for tracking
+- Normalized fields for efficient matching
 
-## Recent Changes (July 21, 2025)
-- **Organized project structure**: Moved 35+ files into logical directories
-- **Created module structure**: src/database, src/ai, src/utils for better organization
-- **Cleaned up logs**: Moved active log files to logs/ directory, removed unused logs
-- **Updated import paths**: Fixed all import statements to use new module structure
-- **Archived old files**: Moved deprecated scripts to archive/ directory
-- **Completed AI System Implementation**: Fully implemented all components from the AI system plan
+### Matching Capabilities
+The system can now:
+1. Match voter records with campaign contributor records
+2. Calculate match probability based on:
+   - Name similarity using fuzzy matching algorithms
+   - Address matching with street-level precision
+   - ZIP code verification
+3. Identify voters who have made political contributions
+4. Track contribution amounts and patterns by voter
+5. Generate comprehensive reports on voter engagement in campaign finance
 
-## AI System Features (Completed July 21, 2025)
-The comprehensive AI system for campaign finance analysis is now fully implemented with the following capabilities:
+### Scripts Added
+- `scripts/import_voters.py` - Imports voter data from CSV files
+- `scripts/voter_contributor_matching.py` - Full matching analysis
+- `scripts/quick_voter_match_demo.py` - Quick demonstration of capabilities
 
-### 1. **Time Series Forecasting** (ai_time_series.py)
-- Predict future contribution patterns using polynomial regression
-- Analyze trends, seasonality, and growth metrics
-- Support for election-wide and candidate-specific forecasts
-- Visual forecasting with confidence intervals
+### Current Data Status
+- Voters loaded: 3,000+ (import ongoing)
+- Contributors in database: 579,921
+- Contributions tracked: 1,931,534
+- Expenditures: 56,566
 
-### 2. **Entity Extraction & NLP** (ai_entity_extraction.py)
-- Extract and classify entities from text using NLTK
-- Identify contributors, organizations, PACs, and unions
-- Build entity networks based on shared connections
-- Standardize organization names and addresses
+## Running the Analysis
 
-### 3. **Model Training & Fine-tuning** (ai_fine_tuning.py)
-- Train custom models for campaign finance tasks:
-  - Contributor type classification
-  - Donation size prediction
-  - Recipient success prediction
-- Save and load trained models
-- Model evaluation with cross-validation
-
-### 4. **Advanced Embeddings** (ai_embeddings.py)
-- TF-IDF, LDA, and NMF for text analysis
-- Topic modeling and key phrase extraction
-- Clustering and similarity search
-- Ensemble embedding methods
-
-### 5. **Semantic Search** (ai_search.py)
-- Natural language query processing
-- Advanced contributor search with ML
-- Anomaly detection using Isolation Forest
-- Duplicate donor detection
-- Integration with all AI modules
-
-### 6. **Natural Language Interface**
-- Convert plain English questions to SQL queries
-- Smart pattern matching for queries
-- Support for complex analytical questions
-
-### Model Storage Structure
-```
-models/
-├── embeddings/      # Text embedding models
-├── classification/  # Trained classifiers
-├── clustering/      # Clustering models
-└── analysis/        # Statistical models
+### Import Voter Data
+```bash
+python scripts/import_voters.py
 ```
 
-### Available Analysis Types in UI
-1. Contribution Patterns - ML-based pattern analysis
-2. Donor Networks - Network analysis of contributors
-3. Duplicate Detection - Find duplicate donors
-4. Semantic Search - AI-powered search
-5. Advanced Clustering - Group similar contributors
-6. Topic Analysis - Extract themes from data
-7. Time Series Forecasting - Predict future contributions
-8. Entity Extraction - Extract and analyze entities
-9. Model Training & Fine-tuning - Train custom models
+### Run Matching Analysis
+```bash
+# Quick demo
+python scripts/quick_voter_match_demo.py
 
-### Technical Implementation
-- Uses scikit-learn, NLTK, Gensim, and TextBlob
-- No external API dependencies - fully self-contained
-- Local model training and inference
-- Privacy-focused with all data staying local
-- Real-time analysis for datasets up to 1M records
-
-## Database Schema
-The application uses PostgreSQL with the following main tables:
-- contributions - Political contributions data
-- expenditures - Campaign expenditures
-- contributors - Donor information
-- recipients - Candidate/committee information
-- intermediaries - Intermediary organizations
-- locations - Geographic data
-- employers - Employer information
-- elections - Election cycle data
+# Full analysis
+python scripts/voter_contributor_matching.py
+```
 
 ## Workflows
-1. **Direct Import**: Imports contribution data from CSV files
-2. **Import Expenditures**: Imports expenditure data
-3. **Import Intermediaries**: Imports intermediary contribution data
-4. **Streamlit App**: Main web application (port 5000)
+The following automated workflows are configured:
+- **Direct Import** - Imports contribution data
+- **Import Expenditures** - Imports expenditure records
+- **Import Intermediaries** - Processes intermediary contributions
+- **Import Voters** - Imports voter contact records (background process)
+- **Streamlit App** - Main web interface on port 5000
 
-## User Preferences
-- Keep code well-organized in logical directories
-- Maintain clean root directory structure
-- Use descriptive file and directory names
-- Document major architectural changes
+## Technical Architecture
+- **Database**: PostgreSQL with full-text search and fuzzy matching extensions
+- **Backend**: Python with psycopg2, pandas, SQLAlchemy
+- **Frontend**: Streamlit web application
+- **Matching Algorithm**: Uses pg_trgm extension for fuzzy text matching
+- **Data Processing**: Batch processing with error handling and transaction management
 
-## Development Guidelines
-- Always use relative imports within src/ modules
-- Keep logs in the logs/ directory
-- Archive old/deprecated code instead of deleting
-- Update this file when making structural changes
+## Key Features
+1. **Data Import Pipeline**: Automated import from CFB data files and voter lists
+2. **Name Normalization**: Standardizes names for accurate matching
+3. **Address Normalization**: Standardizes addresses for geographic matching
+4. **Probability Scoring**: Multi-factor matching with confidence scores
+5. **Batch Processing**: Efficient processing of large datasets
+6. **Error Handling**: Robust error handling with transaction rollback
+
+## Future Enhancements
+- Complete import of full voter dataset (7,287 records)
+- Expand matching to include employment and occupation data
+- Add geographic clustering analysis
+- Create visualization dashboards for matched data
+- Implement real-time matching for new contributions
+- Add export functionality for matched results
+
+## Data Privacy Note
+All voter and contributor data is handled in accordance with public records laws. The matching system is designed for legitimate political analysis and compliance purposes only.

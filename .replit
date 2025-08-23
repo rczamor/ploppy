@@ -36,6 +36,10 @@ args = "Import Intermediaries"
 task = "workflow.run"
 args = "Test Streamlit"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Import Voters"
+
 [[workflows.workflow]]
 name = "Streamlit App"
 author = "agent"
@@ -77,6 +81,17 @@ author = "agent"
 task = "shell.exec"
 args = "streamlit run test_app.py --server.port 5001"
 waitForPort = 5001
+
+[[workflows.workflow]]
+name = "Import Voters"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd /home/runner/workspace && python3 scripts/import_voters.py"
+
+[workflows.workflow.metadata]
+outputType = "console"
 
 [[ports]]
 localPort = 5000
