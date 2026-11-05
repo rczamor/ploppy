@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "ploppy",
+      "runtimeExecutable": ".claude/run_local.sh",
+      "runtimeArgs": [],
+      "port": 8501
+    }
+  ]
+}
