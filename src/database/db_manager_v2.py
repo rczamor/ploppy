@@ -9,7 +9,10 @@ from datetime import datetime
 import numpy as np
 import re
 from typing import Dict, List, Optional, Tuple
-from replit.object_storage import Client as ObjectStorageClient
+try:
+    from replit.object_storage import Client as ObjectStorageClient  # type: ignore
+except ImportError:  # not running on Replit
+    ObjectStorageClient = None  # type: ignore
 from .code_mappings import *
 import requests
 import json
@@ -31,7 +34,9 @@ class NYCCFBDatabase:
         self.storage_client = None
     
     def connect_to_object_storage(self, bucket_id: str = '') -> bool:
-        """Connect to Replit Object Storage bucket."""
+        """Connect to Replit Object Storage bucket (no-op outside Replit)."""
+        if ObjectStorageClient is None:
+            return False
         try:
             if bucket_id:
                 self.storage_client = ObjectStorageClient(bucket_id=bucket_id)
