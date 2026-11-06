@@ -187,18 +187,6 @@ def init_database():
         st.error(f"Oink! Database connection failed: {e}")
         raise
 
-# Initialize AI components
-@st.cache_resource
-def init_ai_components():
-    """Initialize AI search components."""
-    try:
-        analyzer = ContributionAnalyzer()
-        query_processor = NaturalLanguageQueryProcessor()
-        return analyzer, query_processor
-    except Exception as e:
-        st.warning("AI features unavailable - but Ploppy still works great! 🐷")
-        return None, None
-
 # Cache key stats
 @st.cache_data(ttl=300)
 def get_key_stats():
