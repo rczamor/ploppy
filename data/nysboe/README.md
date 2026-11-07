@@ -81,7 +81,10 @@ you need refund-adjusted totals.
   handles.
 - Filer names live in a separate filer table (`commcand.csv` in the UI, or dataset
   `7x2g-h32p` on the portal); join on `filer_id`. `cand_comm_name` is denormalized
-  into these rows already.
+  into these rows already. **That registry is now loaded** as `nysboe_filers`
+  (81,483 rows) and covers **all 13,707** filer ids appearing here — see
+  [data/cfb/README.md](../cfb/README.md). Note `filer_id` is not unique there, so
+  an unqualified join fans out and multiplies amounts.
 - Pre-July-1999 reports are not in the database at all (paper records held by the
   State Archives).
 
