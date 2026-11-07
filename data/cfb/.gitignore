@@ -1,0 +1,4 @@
+# Source exports are large and re-downloadable from the CFB / NYSBOE sites.
+*.csv
+*.log
+ListOfFilers_repaired.csv
