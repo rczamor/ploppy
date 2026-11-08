@@ -40,20 +40,70 @@ Runs on **Vercel**. This is the only requirement stated by the owner.
 
 ### Non-goals
 
-Do not build these. Each duplicates something free and better-resourced:
-
-- **Any ZIP / neighborhood / Council-district / Assembly-district choropleth of NYC
-  donations.** The CFB × CUNY donor map already covers 2013, 2017, 2021 *and* 2025 across
-  all four of those geographies. Verified directly.
-- **NYC in-city donor share.** CFB publishes it in its own post-election report
-  (2025: 244,401 individual contributions, $41.1M, 88.2% under $250, median $50).
-- **Top-donor / top-recipient leaderboards with CSV export over NYSBOE.** That is
-  Concourse's Campaign Finance Explorer line for line — 16,516,089 records, five time
-  filters, CSV export, last updated 2026-03-10.
 - **Plain contributor-name search over NYSBOE.** publicreporting.elections.ny.gov and
-  Transparency USA.
+  Transparency USA already do it, and the authenticated console covers the case better.
 - **Donor ideology scoring from scratch.** Import DIME v4.0 as a static reference layer
   with an explicit 2024 ceiling instead.
+- **Bulk CSV export of the corpus.** Concourse's Campaign Finance Explorer does this over
+  NYSBOE (16,516,089 records, five time filters, last updated 2026-03-10) and there is no
+  reason to reproduce it. Per-view export is also out of scope by the owner's instruction.
+
+### Three views reinstated by the owner's decision
+
+An earlier draft listed these as non-goals on the grounds that they duplicate free tools.
+**That reasoning was inherited from the commercial analysis and does not apply here.** This is
+a personal research tool, so the test is whether the owner wants the view, not whether it is
+differentiated. Recorded as the owner's decision, 2026-11-08:
+
+| View | Note |
+|---|---|
+| **NYC donation choropleth** — ZIP, neighborhood, Council district, Assembly district | Overlaps the CFB × CUNY map, which covers 2013/2017/2021/2025 across the same four geographies |
+| **NYC in-city donor share** | Overlaps CFB's own post-election report (2025: 244,401 individual contributions, $41.1M, 88.2% under $250, median $50) |
+| **Top-donor / top-recipient leaderboards** | No CSV export |
+
+Two of these overlap figures published elsewhere, and that is turned into an asset rather than
+accepted as a cost: both become **reported-not-asserted gates** (§8 step 7) rendered as
+pages. CFB reports 70.8–78% of 2025 individual contributions as in-city; the loaded data
+measures 28.6% of NYC municipal dollars arriving from outside the five boroughs, which
+brackets it. Publishing our figure beside theirs, with the predicate stated, is a direct
+demonstration that the rest of the numbers can be trusted — which is the project's actual
+edge. If the two disagree, that is a finding either way.
+
+**Decided by the owner, 2026-11-08: no named natural persons on the public leaderboard.**
+
+The privacy concern is natural persons, not legal entities — a corporation, union or PAC is
+not a person, and naming one publicly discloses nothing about an individual. So the ruling
+resolves into a split along `entity_class` (§3.1), a column the design already has, rather
+than a blanket aggregation. Measured over positive-amount contribution schedules, 2016+:
+
+| | NYC CFB | NYS BOE |
+|---|---|---|
+| Natural persons | 967,592 rows · $163.3M · **91.9%** | 5,410,751 rows · $1,491.5M · **56.7%** |
+| Entities (nameable) | 9,640 rows · $10.0M · **5.7%** | 720,765 rows · $1,137.6M · **43.3%** |
+| Candidate self-funding | 1,606 rows · $4.3M · 2.4% | — |
+
+**The cost is uneven and worth stating plainly.** A public NYS leaderboard of named entities
+covers 43.3% of the money and is substantive on its own. The same thing for NYC covers
+**5.7%** — so a public NYC donor leaderboard restricted to entities is close to pointless, and
+the NYC public view has to be the *aggregated individual* one: top employers and sectors
+(build 5's data, 74.6% coverage of individual gifts, NYC-only), top ZIPs, and amount-band
+distribution. Named individuals exist only behind authentication, in both jurisdictions.
+
+Two things that follow:
+
+- **Entity class must come from `entity_class`, never from the schedule.** 94,636 NYSBOE
+  Schedule A rows populate `flng_ent_name` — those are partnerships, i.e. entities, worth
+  $62.0M — so deriving the public/private split from "Schedule A means individual" would
+  publish 2.4% of NYS dollars' worth of entity names as though they were people, and
+  conversely hide them.
+- **Candidate self-funding is a carve-out that is available but not assumed.** `c_code = 'CAN'`
+  is 2.4% of in-window NYC dollars ($227.5M all-time, mostly pre-2016). A candidate is a
+  natural person, but is already named as the recipient and self-funding is a disclosure
+  requirement, so naming it publicly discloses nothing new. Left behind authentication under
+  the ruling above unless the owner says otherwise.
+
+Dropping CSV export reduces bulk-harvest convenience but a rendered page is still scrapeable,
+so export was never the control — the `entity_class` split is.
 
 ### Where the edge actually is
 
@@ -322,15 +372,177 @@ Ruling:
 
 ---
 
-## 7. The five builds
+## 7. The eight builds
 
 | # | Build | Status |
 |---|---|---|
 | 1 | **2021 NYC Program A vs Program B matching-ratio experiment** | Unblocked by the code-mappings fix |
 | 2 | **Matching-funds leverage** — public dollars per private dollar | Needs the three small payments files |
 | 3 | **Cross-jurisdiction donor identity**, shipped as a confidence range | Needs §3.1 and calibration |
-| 4 | **NYS in- vs out-of-district money** | **Blocked** — needs a ZIP→district crosswalk that does not exist |
+| 4 | **NYS in- vs out-of-district money** | **Blocked** — needs the district attribution layer (§7.1) |
 | 5 | **NYC employer / industry sectors** | NYC-only, permanently |
+| 6 | **NYC donation choropleth** — ZIP, neighborhood, Council, Assembly | **Blocked** — needs the district attribution layer (§7.1) |
+| 7 | **In-city / in-state share**, published beside CFB's own figure | Cheap: `BOROUGHCD` is 99.8% populated |
+| 8 | **Top-donor / top-recipient leaderboards** | Recipient side is a small rollup; donor side needs the privacy decision in §1 |
+
+### 7.1 District attribution is one layer, not two problems
+
+Builds 4 and 6 were scoped separately and are the same work. Both need a contribution's
+*donor location* attributed to a district, and both run across a ten-year window that spans
+more than one district map: **NYC Council districts were redistricted in 2023**, and the New
+York State Assembly and Senate maps also changed inside the window. A choropleth or an
+in-district share computed against a single current map silently misattributes every
+contribution made under a previous one.
+
+**Correction to an earlier draft of this section: attribution keys to the ELECTION, not the
+contribution date.** No source supplies a clean contribution-date boundary for a map era.
+Chapter 127 of 2023 took effect on signature (2023-04-24) but governs the 2024 elections;
+NYC Charter § 51 sets no effective date at all and the operative event was the 2022-11-02
+City Clerk filing. Keying on the date produces an arbitrary answer in the months around each
+transition. Key every era to the election cycle instead, and compute it once in the pipeline.
+
+### Era register — measured, not inferred
+
+An agent downloaded 12 DCP Council releases and 14 TIGER legislative vintages and diffed
+district areas; a second agent independently reproduced every figure by range-reading the
+`.dbf` member of each remote archive.
+
+| Geography | Eras in window | How the flip was found |
+|---|---|---|
+| NYC Council | **2** | `nycc_22c` → `nycc_22c1`: 45 of 51 districts changed, max 48.63% on district 43 |
+| NY Assembly | **3** | 2021→2022: 134/150 changed (max 79.18%, AD34); 2023→2024: 54/150 (max 20.07%, AD101) |
+| NY Senate | **2** | 2021→2022: 63/63 changed, max 483.67% on SD44 |
+| NYC Community Districts | 1 | no material change in window |
+
+Three things fall out of that table:
+
+- **A ten-year choropleth on one Council map is wrong, not merely imprecise** — 40 of 51
+  districts changed materially. The window holds four Council general elections (2017, 2021,
+  2023, 2025), with 2023 the first under the new lines.
+- **The 2013-era Council map is not on NYC Open Data.** `872g-cjhh` serves the current
+  version only. Era A must be mirrored from DCP's BYTES archive, and `nycc_13a`…`nycc_13dav`
+  do **not** contain the 2013 map despite their names — it arrives at `14aav`.
+- **The Assembly needs three eras.** The February 2022 legislative Assembly map governed both
+  2022 elections even though the First Department voided it on 2022-06-10, because the court
+  declined to displace it for that cycle. The February 2022 *Senate* map, by contrast, was
+  never used in any election.
+
+DCP's own archive manifest **ships broken download URLs** for State Senate (doubled
+directory) and State Assembly (`byte` singular) — both 404 — and `www.nyc.gov` returns an
+Akamai 403 to plain scripted clients, so the manifest is not an unattended source. LATFOR
+publishes authoritative statewide shapefiles for all five legislative eras at permanent URLs,
+and those are the better source. Expect to write per-file normalization: there are **three
+different CRSs** across the five files (including one unprojected NAD83 geographic), one file
+has no district column at all (only `ID` 1–150), one stores district codes NUL-padded
+(`'1\x00\x00\x00\x00'`), and two carry more polygons than districts.
+
+### The crosswalk can be exact, not estimated
+
+This is the best finding in the component. LATFOR also publishes **2020-Census-block →
+district assignment tables**, and their 288,819 rows **exactly equal the NY 2020
+`TABBLOCK20` record count** — so block coverage is complete. Combined with the Census 2020
+ZCTA→block relationship file, a **population-weighted ZIP→district crosswalk is exact rather
+than area-estimated.** That removes the main methodological objection to the whole approach.
+
+The ZCTA→block file is 1.0 GB but sorted by ZCTA and serves HTTP 206, so the New York slice
+is roughly a 35 MiB range read. **Derive the byte boundaries at run time and assert the first
+and last keys** — do not hardcode offsets. The offsets an agent proposed clipped ZCTA 10001
+entirely.
+
+Measured apportionment behaviour, independently reproduced:
+
+- **The containment gap is empty between 0.12 and 0.98.** A ZIP is either almost entirely
+  inside one district or split close to evenly, with almost nothing in between — which makes
+  the gate threshold easy to choose rather than arbitrary.
+- Method choice matters less than expected: total variation distance between apportionment
+  methods has mean 0.068 and median 0.024, with 14 of 201 ZIPs changing their dominant
+  district.
+- **Jersey City ZIP 07305 lands in Council District 1 at weight 1.00 with no gate.** Out-of-
+  jurisdiction ZIPs must be fenced explicitly.
+
+Two rules for the measure itself:
+
+- **ZCTA is not ZIP.** The Census Bureau states plainly that not all valid ZIP codes are
+  represented by a 2020 ZCTA. PO-box and single-building ZIPs — common in Manhattan — must
+  land in `unknown_geo`, never be silently dropped.
+- Keep a `geo_method` column and publish the share attributed by each method. NYSBOE's
+  `flng_ent_add1` is populated on 95.50% of in-window rows, and it is dropped for privacy
+  anyway, so the ZIP crosswalk is the mandatory path for **both** jurisdictions, not a
+  fallback for one.
+
+`MODZCTA` (`pri4-ifjk`) is disqualified by its own metadata: last updated 2020-05-13, DOHMH
+COVID-era data on 2010 Census geography. `35j5-n34v` is the right current ZIP layer and is
+provably the 2020 ZCTA vintage — but it is a one-off OTI decadal Census extract, not a live
+DCP dataset, so nobody refreshes it. `h4i2-acfi` is broken (53-byte export, 28 null
+geometries). For NYC senate districts, `afns-vxeu` works (28 features, field `st_sen_dist`)
+and keeps all five layers in one DCP lineage.
+
+**Unsolved:** the portal carries no 2010-vintage ZCTA or NTA boundary file at all, so the
+second census-vintage era axis — ZIP and neighborhood geography changing with the 2020
+Census, independently of redistricting — needs TIGER or DCP archives and is open work.
+
+### Delivery — geometry does not go in Blob
+
+Two corrections to the architecture as drawn:
+
+- **MapLibre GL JS v6 is ESM-only; its UMD bundles were withdrawn.** It cannot be loaded
+  from a plain CDN script tag, which is the whole premise of the no-bundler frontend. The
+  working stack is **d3-geo + topojson-client + d3-scale-chromatic**, all genuine UMD, at
+  23,368 B brotli combined.
+- **Vercel compresses static deployment assets; Vercel Blob exposes no compression option**
+  (measured: 443,658 B → 19,913 B brotli in the deployment). So boundary geometry and the
+  small view JSON belong in the **deployment**, not Blob. Only the fact-grain Parquet goes
+  to Blob.
+
+The 200 KB-per-layer budget is met with large headroom — a one-era set measures 166,133 B
+gzipped with a 50.3 KiB worst layer. Round coordinates to 4 decimal places (~85 m).
+Simplification is a bigger lever (2.86×) than compression, since Vercel serves brotli and
+brotli only buys 1.38–1.62× on this geometry. PMTiles is unnecessary at these sizes.
+
+Cartography: map a **normalized** measure — share of the jurisdiction total, or dollars per
+capita — never raw dollars, or the map just shows where people live. Sequential single-hue
+ramp, never diverging for a magnitude measure. The `ambiguous_zip` share gets stated as a
+figure beside the map rather than shaded into a polygon, and the map ships with a table view
+so identity is never carried by colour alone.
+
+One budget note: cache hits escape Vercel's Simple Operations meter, but **every blob access
+by URL still counts as a CDN Request**, and Hobby allowances are shared across the project.
+Operations are a non-issue; the per-month request budget is not, for a browser-facing page.
+
+**One constraint governs the whole layer: NYC donations can never be geocoded finer than
+ZIP.** The CFB export leaves `STRNO`, `STRNAME` and `APARTMENT` blank on every row, so a
+Council-district or Assembly-district choropleth for NYC is necessarily a ZIP-to-district
+*apportionment*, not a point-in-polygon geocode. ZIPs straddle districts, so the figure
+carries irreducible error and must say so on the page. NYSBOE rows do carry street addresses,
+but those are dropped under the privacy rule in §6, so the same constraint applies in
+practice to both jurisdictions.
+
+### 7.2 Build 7 reconciles against CFB, and the gate already earned its keep
+
+Running the comparison before writing the page produced a result worth recording.
+
+CFB's 2025 post-election report publishes **244,401 individual contributions totalling
+$41.1M**, with 70.8–78% in-city. Measured against the loaded export:
+
+| Predicate | Contributions | Total | vs CFB |
+|---|---|---|---|
+| `election LIKE '2025%'`, `c_code IN ('IND','FAM','SPO','CAN')` | 292,819 | $47,385,215 | +48,418 / +$6.29M |
+| `election LIKE '2025%'`, `c_code = 'IND'` | 292,307 | $46,278,823 | +47,906 / +$5.18M |
+| **`election = '2025'`, `c_code = 'IND'`, `amnt > 0`** | **252,234** | **$41,770,855** | **+7,833 / +$0.67M** |
+
+The third predicate reconciles to within **3.2% on count and 1.6% on dollars**, and the
+in-city share lands at 73.0% of rows / 68.9% of dollars — inside CFB's stated band. The
+residual looks like a snapshot-date difference rather than a definitional one: restricting to
+contributions dated on or before election day removes only 439 rows, so filings that arrived
+after CFB's report went out are the likely explanation. That is precisely why every figure
+carries a `build_id` and an as-of date (§3.5).
+
+**This also quantifies the election-token hazard.** The 2025 family splits
+`2025` 254,317 rows / $44.27M · `2025A` 658 · `2025B` 1,011 · `2025T` 38,496 rows / $4.42M.
+Treating the token as an integer, or globbing `2025%`, pulls in the transition election and
+moves the headline by **15%**. Keep `election` as its full VARCHAR token, derive `base_year`
+and `suffix` as separate columns, and never cast it. Suffixes `B` and `C` are absent from
+`code_mappings.py` entirely.
 
 Build 1 is the only genuine natural experiment in the data: same city, same year, two match
 ratios and two contribution limits. It is invisible today because `code_mappings.py` labels
@@ -372,11 +584,22 @@ describe the treasurer.
 9. **Private console** — single module-level DuckDB connection, the parser gate pinned in
    tests, httpfs scoped to the two Blob hosts, keyset cursors and streaming everywhere. Last
    and alone, because it is the only surface that can leak person-level data.
-10. The five builds, with #4 behind the ZIP crosswalk.
+10. **The district attribution layer (§7.1)** — the boundary file register per map era, the
+    ZIP→district crosswalk with its weight and concentration columns, and the attribution
+    computed once in the pipeline and keyed to the election cycle. It gates builds 4 and 6.
+11. The eight builds. 1, 2, 7 and 8 need nothing beyond steps 1–7; 3 needs the identity
+    calibration; 5 needs the employer curation curve measured; 4 and 6 wait on step 10.
+    Build 8's donor side additionally waits on the privacy decision in §1.
 
 ---
 
-## 9. Numbers not to trust, including three of mine
+## 9. Numbers not to trust, including four of mine
+
+- **An earlier draft of §7.1 said district attribution should key to the contribution date.**
+  It should key to the election cycle. No source in the research supplies a clean
+  contribution-date boundary for a map era — Chapter 127 of 2023 took effect on signature but
+  governs the 2024 elections, and NYC Charter § 51 sets no effective date at all — so keying
+  on the date gives an arbitrary answer in the months around every transition.
 
 - **`nysboe_contributions` is 3,244 MB**, not the 2,576 MB in `data/nysboe/README.md`
   (1,954 MB heap + 1,290 MB indexes). I repeated the stale figure before measuring it.
@@ -410,8 +633,11 @@ describe the treasurer.
 
 ## 10. Known gaps with no owner
 
-- A **ZIP5 → Assembly/Senate district crosswalk**, with a documented apportionment rule for
-  straddling ZIPs or an explicit "ambiguous" bucket. Build 4 has no data path without it.
+- ~~A ZIP5 → district crosswalk with a documented apportionment rule.~~ **Designed in §7.1**,
+  and it turns out to be exact rather than area-estimated. Two things remain open there: the
+  portal carries no 2010-vintage ZCTA or NTA boundary file, so the census-vintage era axis is
+  unsolved; and one 2023-era Council archive vintage could not be confirmed because
+  archive.org went offline mid-verification.
 - A **per-(cycle, schedule) source-of-record rule for CFB.** Schedules D, X and N overlap
   between the contributions and expenditures exports; once both are loaded, D and X double-
   count with nothing catching it.
