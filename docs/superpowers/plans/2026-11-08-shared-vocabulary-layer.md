@@ -1098,19 +1098,27 @@ database.
 
 - [ ] **Step 3: Verify it would have failed before the fix**
 
-A regression test that cannot fail is worth nothing. Prove this one bites:
+A regression test that cannot fail is worth nothing. Prove this one bites — against the
+tree as it was *before* the label fix, without touching this worktree at all:
 
 ```bash
-git stash push -u -m "ploppy-task6-probe" -- src/database/code_mappings.py src/vocab/
-python3 -m pytest tests/test_program_ab.py -v   # expect FAILURES on the label tests
-PROBE=$(git stash list --format='%H %gs' | grep ploppy-task6-probe | head -1 | cut -d' ' -f1)
-git stash apply "$PROBE" && git stash drop "$(git stash list --format='%gd %gs' | grep ploppy-task6-probe | head -1 | cut -d' ' -f1)"
-python3 -m pytest tests/test_program_ab.py -v   # expect PASS again
+SCRATCH="$TMPDIR/task6-probe"; rm -rf "$SCRATCH"; mkdir -p "$SCRATCH"
+git archive 472caed~1 | tar -x -C "$SCRATCH"      # the tree before the labels were fixed
+cp tests/test_program_ab.py "$SCRATCH/tests/"      # ... plus the NEW test
+ln -s "$PWD/.venv" "$SCRATCH/.venv"                # reuse this project's interpreter
+(cd "$SCRATCH" && ./.venv/bin/python3 -m pytest tests/test_program_ab.py -v)
+rm -rf "$SCRATCH"
 ```
 
-Expected: failures in the middle run naming `Special Designation`, then a clean run after
-restoring. The stash is tagged and applied by SHA rather than popped, because the stash stack
-is shared across git worktrees.
+Expected: FAILURES naming `Special Designation`, because at that commit `code_mappings.py`
+still holds the hand-typed dicts. Then the same test against this worktree passes. New test
+plus old code equals red; new test plus new code equals green. That is the proof.
+
+Do **not** use `git stash` for this. Two reasons: the stash stack is shared across git
+worktrees, so a bare `git stash pop` can take another session's work; and more simply, the
+label fix is already committed, so there is nothing uncommitted to stash and the step would
+silently prove nothing at all. Reconstructing the old tree read-only is both safer and a
+stronger claim.
 
 - [ ] **Step 4: Record what the data actually shows**
 
