@@ -1716,7 +1716,7 @@ Expected: the Postgres-marked tests run and pass. If they all SKIP, the Postgres
 
 Run: `python3 -m pytest -v`
 Expected: all tests pass. The count should be about **150** with Postgres available
-(43 code_key + 51 code_mappings + 3 program_ab + 31 normalize + 3 sql_gen + 44 cross_engine).
+(44 code_key + 74 code_mappings + 3 program_ab + 31 normalize + 3 sql_gen + 44 cross_engine).
 Treat these counts as a sanity check, not a contract: a number materially below them means
 tests were skipped or not collected, which is precisely what `-ra` and
 `PLOPPY_REQUIRE_ENGINES=1` exist to make visible.
@@ -1774,6 +1774,10 @@ jobs:
 
     env:
       PLOPPY_TEST_DSN: "host=localhost port=5432 user=postgres password=postgres dbname=ploppy"
+      # Without this a failed pip install would skip every cross-engine test and
+      # still report green -- the exact false confidence this switch exists to
+      # prevent. Under it, a missing engine is a failure, not a skip.
+      PLOPPY_REQUIRE_ENGINES: "1"
 
     steps:
       - uses: actions/checkout@v5
@@ -1785,7 +1789,7 @@ jobs:
       - name: Install test dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pytest==9.0.2 duckdb==2.0.0 psycopg[binary]==3.3.8 pandas
+          pip install pytest==9.2.0 duckdb==2.0.0 psycopg[binary]==3.3.8 pandas
 
       - name: Create extensions
         run: |
@@ -1801,6 +1805,13 @@ jobs:
       - name: Run tests
         run: python -m pytest -v
 ```
+
+The Python version differs from local on purpose (CI 3.13, local 3.12.7), and that is safe
+for the generated artifacts: the `translate()` table is derived from `unicodedata`, and it
+comes out byte-identical under Unicode 13.0, 15.0 and 15.1 — same 504 folds, 114 deletes,
+same digest. Checked across Python 3.9.6, 3.12.7 and 3.13.0 rather than assumed, because if
+it did vary, `git diff --exit-code` would fail CI on a correctly generated file and the
+cause would be invisible.
 
 Two things that workflow does deliberately. It **regenerates and diffs** the artifacts, so a hand-edited `codes.json` or `name_norm_pg.sql` fails the build rather than silently diverging from its source. And it stands up a real Postgres, because the cross-engine test is worthless if the Postgres leg skips — on PG17, `fuzzystrmatch` would also give `daitch_mokotoff`, which a later plan needs.
 
