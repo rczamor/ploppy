@@ -1270,13 +1270,30 @@ __all__ = [
 # Characters deleted outright, before any folding.
 DELETE_CHARS = "�­"
 
+#: Single-character folds NFD cannot express. A stroke or bar is part of the
+#: letter, not a combining mark, so NFD leaves these intact and the
+#: [^A-Z0-9] step then turns each into a SPACE -- dropping the letter
+#: outright. Measured before this map existed: "Lukasz" with U+0141
+#: normalized to "UKASZ" in all three engines, so it could never match
+#: "LUKASZ". Polish, Scandinavian, Croatian and Turkish surnames all hit this.
+STROKE_FOLDS = {
+    "Ł": "L", "ł": "l",   # L with stroke
+    "Ø": "O", "ø": "o",   # O with stroke
+    "Đ": "D", "đ": "d",   # D with stroke
+    "Ħ": "H", "ħ": "h",   # H with stroke
+    "Ŧ": "T", "ŧ": "t",   # T with stroke
+    "ı": "i", "ȷ": "j",   # dotless i and j
+    "Ɖ": "D", "Ƶ": "Z", "ƶ": "z",
+}
+
 _NON_ALNUM = re.compile(r"[^A-Z0-9]+")
 
 
 def fold_ascii(text: str) -> str:
-    """Delete the no-information characters and strip combining marks."""
+    """Delete the no-information characters, fold strokes, strip combining marks."""
     for ch in DELETE_CHARS:
         text = text.replace(ch, "")
+    text = "".join(STROKE_FOLDS.get(c, c) for c in text)
     decomposed = unicodedata.normalize("NFD", text)
     return "".join(c for c in decomposed if not unicodedata.combining(c))
 
@@ -1290,7 +1307,7 @@ def name_norm(text: str | None) -> str | None:
     return collapsed or None
 
 
-def translate_pairs(max_codepoint: int = 0x24F) -> tuple[str, str]:
+def translate_pairs(max_codepoint: int = 0x1EFF) -> tuple[str, str]:
     """Build the (from, to) argument pair for Postgres translate().
 
     Postgres has no NFD-strip primitive usable in an IMMUTABLE expression, so the
@@ -1315,8 +1332,8 @@ def translate_pairs(max_codepoint: int = 0x24F) -> tuple[str, str]:
     for ch in DELETE_CHARS:
         src.append(ch)  # no counterpart in dst: translate() deletes it
     # Combining marks must go too, or decomposed input diverges from DuckDB.
-    # Python strips them via NFD and DuckDB via strip_accents(), but translate()
-    # on precomposed characters alone leaves them, and the [^A-Z0-9] step then
+    # Python strips them via NFD, but translate() over precomposed characters
+    # alone leaves them, and the [^A-Z0-9] step then
     # turns each one into a SPACE -- splitting the word. Measured:
     #   NFD "JOSE MUNOZ"     -> duckdb 'JOSE MUNOZ'     pg 'JOSE MUN OZ'
     #   NFD "Nguyen Thi Hoa" -> duckdb 'NGUYEN THI HOA' pg 'NGUYE N THI HOA'
@@ -1341,7 +1358,9 @@ GOLDEN_VECTORS: list[tuple[str | None, str | None]] = [
     ("Gutiérrez, José", "GUTIERREZ JOSE"),         # Latin-1 accents
     ("Peña", "PENA"),
     ("Nuñez, María", "NUNEZ MARIA"),
-    ("Łukasz", "LUKASZ"),                          # Latin Extended-A
+    ("Łukasz", "LUKASZ"),                          # stroke, not a combining mark
+    ("Nguyễn Thị Hoà", "NGUYEN THI HOA"),        # Latin Extended Additional
+    ("JOSE\u0301 MUN\u0303OZ", "JOSE MUNOZ"),          # DECOMPOSED: the case that diverged
     ("Nguyễn", "NGUYEN"),                          # Vietnamese combining marks
     ("Trepinski�S", "TREPINSKIS"),            # U+FFFD deleted
     ("JOSE MU�OZ", "JOSE MUOZ"),              # the similarity case
@@ -1501,21 +1520,27 @@ $$;
 
 
 def duckdb_sql() -> str:
-    # DuckDB's strip_accents() covers more codepoints than the Postgres translate
-    # list, so test_cross_engine.py checks every golden vector in both engines
-    # rather than trusting that the two folds coincide.
-    # The delete class must carry the REAL codepoints, not \xNNNN escapes.
-    # DuckDB does not read '\xFFFD' as one codepoint: it reads the chars \xFF,
-    # 'F', 'D', so '[\xFFFD\x00AD]' is a class containing the LETTERS A, D and
-    # F. It deletes those from every name and leaves U+FFFD untouched, with no
-    # error. Verified against duckdb 2.0.0:
-    #   regexp_replace('ADAM FOX', '[\xFFFD\x00AD]', '', 'g') -> 'M OX'
-    #   regexp_replace('DAVID',    '[\xFFFD\x00AD]', '', 'g') -> 'VI'
-    # while the real-codepoint class leaves both intact and strips U+FFFD.
-    delete_class = DELETE_CHARS
+    """Emit the DuckDB macros from the SAME translate table as Postgres.
+
+    Deliberately NOT strip_accents(). DuckDB has translate(), so both engines can
+    be driven by one table generated from one Python definition -- which makes
+    them agree by construction instead of by coincidence. The earlier design used
+    strip_accents() here and translate() there, and the two folds differ on 1,519
+    codepoints. Precomposed input happened to agree, which is why an all-NFC
+    vector set never caught it; decomposed input did not. Measured then:
+
+        NFD "JOSE MUNOZ"     -> duckdb 'JOSE MUNOZ'     postgres 'JOSE MUN OZ'
+        NFD "Nguyen Thi Hoa" -> duckdb 'NGUYEN THI HOA' postgres 'NGUYE N THI HOA'
+
+    A spurious space inside a surname is worse than a missing fold: it silently
+    splits one name into two tokens on every join. With one shared table all 19
+    golden vectors agree in Python, Postgres and DuckDB, decomposed cases
+    included.
+    """
+    src, dst = translate_pairs()
     return f"""{_HEADER}
 CREATE OR REPLACE MACRO fold_ascii(s) AS
-  regexp_replace(strip_accents(s), '[{delete_class}]', '', 'g');
+  translate(s, {_pg_literal(src)}, {_pg_literal(dst)});
 
 CREATE OR REPLACE MACRO name_norm(s) AS
   nullif(trim(regexp_replace(upper(fold_ascii(s)), '[^A-Z0-9]+', ' ', 'g')), '');
@@ -1671,7 +1696,7 @@ Run: `python3 -m pytest tests/test_cross_engine.py -v`
 
 Expected: the DuckDB legs PASS (Task 8 generated a working macro). The Postgres legs PASS locally, or SKIP if no local database.
 
-If any vector diverges, the likely cause is the one documented in `sql_gen.py`: DuckDB's `strip_accents()` covers codepoints the generated Postgres `translate()` list does not. Fix by widening `max_codepoint` in `translate_pairs()`, regenerating, and re-running — **not** by deleting the vector.
+If any vector diverges, both engines now run the *same* generated `translate()` table, so the cause is not a fold mismatch — it is a codepoint outside the table altogether. Fix by widening `max_codepoint` in `translate_pairs()` (or adding a `STROKE_FOLDS` entry if NFD cannot express the fold), regenerating, and re-running — **not** by deleting the vector. A vector deleted to make a suite green is a name that will silently fail to join in production.
 
 Note: `test_the_replacement_character_rule_earns_its_keep` needs `pg_trgm`. If it errors with `function similarity(text, text) does not exist`, run `psql -d ploppy -c "CREATE EXTENSION IF NOT EXISTS pg_trgm"` first.
 
@@ -1699,9 +1724,9 @@ git commit -m "test: assert Python, DuckDB and Postgres normalize names identica
 
 The failure this prevents is silent: one engine emitting SMITH, JOHN A and the
 other SMITH JOHN A makes every fact-to-dimension join return zero rows with no
-error. DuckDB's strip_accents() covers more codepoints than the generated
-Postgres translate() list, so equality is asserted per vector rather than
-assumed."
+error. Both engines run the same generated translate() table, so they agree by
+construction rather than coincidence -- but equality is still asserted per
+vector, because construction is a claim and the test is the evidence."
 ```
 
 ---
@@ -1815,7 +1840,7 @@ git commit -m "ci: run the suite with a real Postgres and diff generated artifac
 git push -u origin claude/application-startup-a6fde1
 ```
 
-Then read the Actions log. A red build here is a real failure, not flake — most likely the Postgres `translate()` list diverging from DuckDB's `strip_accents()` on a codepoint the local run did not exercise.
+Then read the Actions log. A red build here is a real failure, not flake — most likely a codepoint outside the generated `translate()` table that the local run did not exercise, or a generated file committed stale (which `git diff --exit-code` catches).
 
 ---
 
@@ -1849,6 +1874,13 @@ Named here so the next plan does not have to rediscover them:
   the labels does not help a caller that never asks. This belongs with the ETL pipeline
   plan, which owns the loader; recorded here with the measured count so it is not
   rediscovered. Note the fix is `is not None`, not a truthiness test.
+- **Does not fold multi-character ligatures.** `translate()` is strictly 1:1, so Æ→AE,
+  Œ→OE, ß→SS and Þ→TH cannot be expressed in it. All three engines turn them into a
+  space instead, so they stay *consistent* and cross-engine equality holds -- the fold is
+  simply lossy there. Fixing it needs a nested `replace()` chain in both dialects plus the
+  Python equivalent, and these forms are vanishingly rare in NYC/NYS filer names, unlike the
+  strokes in `STROKE_FOLDS`, which drop a letter from common Polish and Scandinavian
+  surnames. Recorded so the identity plan can decide.
 - **Does not correct `ELECTION_TYPES`.** The original map sends election-token
   suffixes `B` and `C` to "General" when they are special elections, and `parse_election_cycle`
   persists the result into `elections.election_type` (`db_manager_v2.py:79`). Fixing the map
