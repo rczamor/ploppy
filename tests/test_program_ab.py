@@ -30,6 +30,15 @@ def test_independent_spender_is_neither_program():
 
 @pytest.mark.postgres
 def test_both_programs_have_2021_contributions(pg_conn):
+    rel = pg_conn.execute(
+        "SELECT to_regclass('public.cfb_contributions')"
+    ).fetchone()[0]
+    if rel is None:
+        pytest.skip(
+            "cfb_contributions is not loaded in this database; this test asserts a "
+            "property of the data, not of the code. CI stands up an empty Postgres "
+            "on purpose -- loading 2.1M rows there is a later plan's decision."
+        )
     with pg_conn.cursor() as cur:
         cur.execute(
             """
