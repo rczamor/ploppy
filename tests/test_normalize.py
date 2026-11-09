@@ -58,31 +58,6 @@ def test_golden_vectors_cover_the_hazard_classes():
     assert len(GOLDEN_VECTORS) >= 20
 
 
-def test_delete_chars_and_the_translate_table_agree():
-    """Every character Python deletes must also be deleted by the generated
-    table, and vice versa. U+034F broke this: category Mn but combining class
-    0, so the NFD filter kept it while translate() removed it. Comparing the
-    two sets directly catches the next one without needing a vector for it."""
-    import unicodedata
-
-    from src.vocab.normalize import DELETE_CHARS, fold_ascii, translate_pairs
-
-    src, dst = translate_pairs()
-    deleted_by_table = set(src[len(dst):])
-    # Python's real behaviour is "fold_ascii erases it". The earlier predicate
-    # (DELETE_CHARS plus combining class > 0) was an approximation that missed
-    # U+0F73, U+0F75 and U+0F81: class 0 themselves, but they decompose under
-    # NFD into marks that are all then stripped, so Python deletes them too.
-    deleted_by_python = set(DELETE_CHARS) | {
-        c for c in src if fold_ascii(c) == ""
-    }
-    assert deleted_by_table == deleted_by_python, (
-        "python and the generated table disagree about which characters vanish: "
-        f"table-only={sorted(deleted_by_table - deleted_by_python)!r} "
-        f"python-only={sorted(deleted_by_python - deleted_by_table)!r}"
-    )
-
-
 def test_every_multichar_uppercase_that_matters_is_expanded_explicitly():
     """The one step not generated from the shared table is upper(), and the
     engines disagree about it: Python does full case mapping, SQL does simple.

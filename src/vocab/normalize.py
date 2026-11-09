@@ -29,6 +29,7 @@ from __future__ import annotations
 import re
 import sys
 import unicodedata
+from functools import lru_cache
 
 __all__ = [
     "DELETE_CHARS",
@@ -117,6 +118,7 @@ def name_norm(text: str | None) -> str | None:
     return collapsed or None
 
 
+@lru_cache(maxsize=1)
 def translate_pairs() -> tuple[str, str]:
     """Build the (from, to) argument pair for translate(), derived from Python.
 
