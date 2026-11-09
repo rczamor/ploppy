@@ -939,12 +939,17 @@ ADJUSTMENT_TYPES = {
 # 2025/2025A/2025B/2025T, 2026/2026A/2026T and 2029.
 # NEVER cast an election token to an integer: '2025T' alone is 38,496 rows and
 # $4.42M, so globbing or casting moves a 2025 headline by 15%.
+# Deliberately UNCHANGED from the original. These values are persisted:
+# db_manager_v2.py:79 writes them into elections.election_type, so editing this
+# map silently rewrites the meaning of stored rows. A better mapping exists --
+# the original sends suffixes B and C to "General" when they are special
+# elections -- but replacing it is a data migration, not a label fix, and
+# belongs with the pipeline plan. CFB's key has no field for these; they are
+# election-token suffixes, not a published enumeration.
 ELECTION_TYPES = {
-    "": "General",
-    "A": "Special",
-    "B": "Special",
-    "C": "Special",
     "T": "Transition",
+    "A": "Special Election",
+    "U": "Unknown Type",
 }
 
 
@@ -954,7 +959,14 @@ def get_office_name(code: str) -> str:
 
 
 def get_candidate_class_desc(code: str) -> str:
-    return _codes.label("CANCLASS", code)
+    """Resolve the export's abbreviation (P/NP/L/UN), not the key's label.
+
+    Going through _codes.label("CANCLASS", ...) would defeat the bridge above
+    and return Unknown for the 1,962,546 rows that hold "P".
+    """
+    if code is None:
+        return "Unknown"
+    return CANDIDATE_CLASS.get(str(code).strip(), f"Unknown Class ({code})")
 
 
 def get_contributor_type(code: str) -> str:
@@ -983,7 +995,7 @@ def get_adjustment_type(code) -> str:
 - [ ] **Step 4: Run them to verify they pass**
 
 Run: `python3 -m pytest tests/test_code_mappings.py -v`
-Expected: PASS, 51 tests.
+Expected: PASS, 50 tests.
 
 Then confirm nothing downstream broke — `src/database/db_manager_v2.py` imports `get_payment_method`, `get_adjustment_type` and `is_individual_name` from this module:
 
@@ -1292,6 +1304,16 @@ def translate_pairs(max_codepoint: int = 0x24F) -> tuple[str, str]:
         dst.append(folded)
     for ch in DELETE_CHARS:
         src.append(ch)  # no counterpart in dst: translate() deletes it
+    # Combining marks must go too, or decomposed input diverges from DuckDB.
+    # Python strips them via NFD and DuckDB via strip_accents(), but translate()
+    # on precomposed characters alone leaves them, and the [^A-Z0-9] step then
+    # turns each one into a SPACE -- splitting the word. Measured:
+    #   NFD "JOSE MUNOZ"     -> duckdb 'JOSE MUNOZ'     pg 'JOSE MUN OZ'
+    #   NFD "Nguyen Thi Hoa" -> duckdb 'NGUYEN THI HOA' pg 'NGUYE N THI HOA'
+    # Appending the range fixes both exactly. Precomposed input agreed already,
+    # which is why a vector set that is entirely NFC would never catch this.
+    for cp in range(0x0300, 0x0370):
+        src.append(chr(cp))
     return "".join(src), "".join(dst)
 
 
@@ -1378,6 +1400,23 @@ def test_duckdb_sql_defines_the_macro():
     assert "CREATE OR REPLACE MACRO name_norm" in sql
 
 
+def test_duckdb_macro_actually_deletes_what_it_claims(duckdb_conn):
+    """A string-presence assertion cannot catch the defect this guards. The
+    escaped form '[\\xFFFD\\x00AD]' is accepted by DuckDB without error and is a
+    class of the LETTERS A, D and F -- it turned 'ADAM FOX' into 'M OX' and left
+    U+FFFD in place. So execute the generated SQL and check behaviour."""
+    from src.vocab.sql_gen import duckdb_sql
+
+    duckdb_conn.execute(duckdb_sql())
+    row = duckdb_conn.execute(
+        "select name_norm(?), name_norm(?), name_norm(?)",
+        ["ADAM FOX", "DAVID", "JOSE\ufffd MUNOZ"],
+    ).fetchone()
+    assert row[0] == "ADAM FOX", "the delete class is eating letters"
+    assert row[1] == "DAVID", "the delete class is eating letters"
+    assert row[2] == "JOSE MUNOZ", "U+FFFD was not deleted"
+
+
 def test_generated_files_are_in_sync(repo_root):
     """Regenerate with: python3 -m src.vocab.sql_gen --write"""
     gen = repo_root / "src" / "vocab" / "generated"
@@ -1455,7 +1494,15 @@ def duckdb_sql() -> str:
     # DuckDB's strip_accents() covers more codepoints than the Postgres translate
     # list, so test_cross_engine.py checks every golden vector in both engines
     # rather than trusting that the two folds coincide.
-    delete_class = "".join(f"\\x{ord(c):04X}" for c in DELETE_CHARS)
+    # The delete class must carry the REAL codepoints, not \xNNNN escapes.
+    # DuckDB does not read '\xFFFD' as one codepoint: it reads the chars \xFF,
+    # 'F', 'D', so '[\xFFFD\x00AD]' is a class containing the LETTERS A, D and
+    # F. It deletes those from every name and leaves U+FFFD untouched, with no
+    # error. Verified against duckdb 2.0.0:
+    #   regexp_replace('ADAM FOX', '[\xFFFD\x00AD]', '', 'g') -> 'M OX'
+    #   regexp_replace('DAVID',    '[\xFFFD\x00AD]', '', 'g') -> 'VI'
+    # while the real-codepoint class leaves both intact and strips U+FFFD.
+    delete_class = DELETE_CHARS
     return f"""{_HEADER}
 CREATE OR REPLACE MACRO fold_ascii(s) AS
   regexp_replace(strip_accents(s), '[{delete_class}]', '', 'g');
@@ -1792,6 +1839,11 @@ Named here so the next plan does not have to rediscover them:
   the labels does not help a caller that never asks. This belongs with the ETL pipeline
   plan, which owns the loader; recorded here with the measured count so it is not
   rediscovered. Note the fix is `is not None`, not a truthiness test.
+- **Does not correct `ELECTION_TYPES`.** The original map sends election-token
+  suffixes `B` and `C` to "General" when they are special elections, and `parse_election_cycle`
+  persists the result into `elections.election_type` (`db_manager_v2.py:79`). Fixing the map
+  therefore changes the meaning of already-stored rows, which is a migration rather than a
+  label fix. Left exactly as found; the pipeline plan owns it.
 - **Does not clean the literal string `'None'`.** `canclass` holds the four-character
   string `'None'` on 20 rows -- a Python `None` stringified at load time rather than a
   NULL. Harmless at this scale and invisible to label lookup (it resolves to Unknown),
