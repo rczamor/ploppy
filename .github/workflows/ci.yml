@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ploppy
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      PLOPPY_TEST_DSN: "host=localhost port=5432 user=postgres password=postgres dbname=ploppy"
+      # Without this a failed pip install would skip every cross-engine test and
+      # still report green -- the exact false confidence this switch exists to
+      # prevent. Under it, a missing engine is a failure, not a skip.
+      PLOPPY_REQUIRE_ENGINES: "1"
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest==9.2.0 duckdb==2.0.0 psycopg[binary]==3.3.8 pandas
+
+      - name: Create extensions
+        run: |
+          PGPASSWORD=postgres psql -h localhost -U postgres -d ploppy \
+            -c "CREATE EXTENSION IF NOT EXISTS pg_trgm"
+
+      - name: Verify the generated artifacts are in sync
+        run: |
+          python -m src.vocab.code_key --write
+          python -m src.vocab.sql_gen --write
+          git diff --exit-code -- src/vocab/codes.json src/vocab/generated/
+
+      - name: Run tests
+        run: python -m pytest -v
