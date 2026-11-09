@@ -1391,7 +1391,7 @@ if __name__ == "__main__":
 - [ ] **Step 4: Run them to verify they pass**
 
 Run: `python3 -m pytest tests/test_normalize.py -v`
-Expected: PASS, 31 tests (22 golden vectors + 9 behaviour tests).
+Expected: PASS, 31 tests (28 golden vectors + 9 behaviour tests).
 
 - [ ] **Step 5: Commit**
 
@@ -1916,6 +1916,32 @@ cannot build an identity schema on top of this without doing two things **first*
 
 Until then, treat `vocab.name_norm` as correct but unadopted. A correct normalizer that
 nothing calls prevents no failures at all.
+
+## Two literals that looked like escapes
+
+Both engines were, at different times, handed a string literal that parsed as something other
+than what it spelled. Neither raised an error. Neither was visible to anything short of
+executing the generated SQL, and in both cases the damage was to ordinary names.
+
+**DuckDB.** `'[\xFFFD\x00AD]'` is not a two-codepoint character class. DuckDB reads it as the
+characters `\xFF`, `F`, `D`, so the class contains the **letters A, D and F** and deletes them
+from every name while leaving U+FFFD untouched. `regexp_replace('ADAM FOX', ...)` returned
+`'M OX'`; `'DAVID'` returned `'VI'`. Fix: embed the real codepoints.
+
+**Postgres.** `U&'...'` accepts `\XXXX` only for the BMP; beyond it the form is `\+XXXXXX`.
+Once the fold table covered the supplementary planes, `\1D165` parsed as U+1D16 followed by
+the literal digit `5` — adding `5`, and the other hex-digit characters, to the **delete** list.
+So the function silently ate the digits 0–9 and the letters A–F from every name:
+`name_norm('SMITH, JOHN A')` returned `'SMITH JOHN'` and `name_norm('1199 SEIU')` returned
+`'SIU'`. Verified directly: `select U&'\1D165'` returns two characters, `select U&'\+01D165'`
+returns one. Fix: `\+XXXXXX` above U+FFFF.
+
+**The lesson that generalises.** A simulated check — comparing Python against the generated
+*table* — caught neither, because both bugs live in the step between the table and the engine.
+Only executing the generated SQL against a real engine finds them. So `test_cross_engine` is
+not a formality on top of the generator; it is the only thing that tests the generator's
+output as output. Any future change to a literal helper must be verified by running the SQL,
+not by reading it.
 
 ## The one step not generated
 
