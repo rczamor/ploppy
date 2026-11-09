@@ -371,6 +371,14 @@ Expected: FAIL — `ModuleNotFoundError: No module named 'src.vocab.code_key'`.
 
 - [ ] **Step 3: Write the parser**
 
+> The code below is the parser as it actually landed, after review. An earlier draft
+> recovered CFB's missing semicolon with a lookahead that treated any ` word=` as a new
+> code. That heuristic and the defect are one mechanism and cannot be told apart: it
+> fabricated a code from `B=Bar (see note: x=y)` and truncated `AB-1=Label` to
+> `{'1': 'Label'}`, both silently. The repair is now named data keyed by field, the first
+> `=` in a segment is the separator, and anything unexpected raises. Output is identical
+> on all 52 fields; only the failure mode changed.
+
 `src/vocab/code_key.py`:
 
 ```python
@@ -394,46 +402,71 @@ __all__ = ["parse_enumeration", "parse_key_csv", "build_codes", "main"]
 # A bracketed enumeration at the end of a description: "... : [a=b; c=d]"
 _BRACKETED = re.compile(r"\[(?P<body>[^\[\]]*)\]\s*$")
 
-# One code=label pair. The lookahead stops the lazy label at the next "code=",
-# which is what recovers CFB's missing semicolon in ADJTYPECD. It requires
-# whitespace before the next code, so a parenthetical like "(EC2021 Only)"
-# stays part of the label.
-_PAIR = re.compile(r"([A-Za-z0-9]+)\s*=\s*(.*?)(?=\s+[A-Za-z0-9]+\s*=|$)")
+class CodeKeyError(ValueError):
+    """The published key did not parse as expected. Never silently absorbed."""
 
 
-def parse_enumeration(text: str) -> dict[str, str]:
+#: CFB publishes exactly one malformed enumeration. The repair is named here as
+#: data rather than inferred by a general heuristic, because a lookahead that
+#: treats " word=" as the start of a new code cannot distinguish this defect
+#: from a legitimate label containing "=" -- "B=Bar (see note: x=y)" would
+#: silently fabricate a code "x". Naming it means an upstream change raises
+#: instead of being quietly absorbed: if CFB ever adds the missing semicolon,
+#: test_known_repair_is_still_needed fails, which is the signal to delete this.
+KNOWN_REPAIRS: dict[str, tuple[str, str]] = {
+    "ADJTYPECD": ("1=Returned Check 2=Refund", "1=Returned Check; 2=Refund"),
+}
+
+
+def parse_enumeration(body: str, field: str | None = None) -> dict[str, str]:
     """Extract a code->label mapping from an enumeration body.
 
     Handles the three forms CFB actually publishes:
-      "0=Unknown; 1=Cash"                     -> {"0": "Unknown", "1": "Cash"}
-      "1=Returned Check 2=Refund"             -> both pairs, despite no separator
-      "Participant, Non-Participant"          -> label-as-code, no equals signs
-    "Blank" as a code means the empty string.
+      "0=Unknown; 1=Cash"                -> {"0": "Unknown", "1": "Cash"}
+      "Participant, Non-Participant"     -> label-as-code, no equals signs
+      "Blank = Not Exempt"               -> "Blank" means the empty-string code
+
+    The first "=" in a segment is the separator, so a label may contain "=".
+    Anything that does not fit these forms raises CodeKeyError rather than
+    returning a plausible-looking dict.
     """
-    text = (text or "").strip()
-    if not text:
+    body = (body or "").strip()
+    if not body:
         return {}
 
+    repair = KNOWN_REPAIRS.get((field or "").upper())
+    if repair and repair[0] in body:
+        body = body.replace(*repair)
+
+    segments = [s.strip() for s in body.split(";") if s.strip()]
+    if not segments:
+        return {}
+
+    # Format 3: a comma-separated label list with no "=" anywhere.
+    if not any("=" in s for s in segments):
+        return {p.strip(): p.strip() for s in segments for p in s.split(",") if p.strip()}
+    if not all("=" in s for s in segments):
+        raise CodeKeyError(f"{field or '?'}: mixed coded and uncoded segments: {segments!r}")
+
     out: dict[str, str] = {}
-    for chunk in text.split(";"):
-        for code, label in _PAIR.findall(chunk.strip()):
-            label = label.strip().rstrip(",;").strip()
-            if not label:
-                continue
-            key = "" if code.lower() == "blank" else code
-            out[key] = label
-
-    if out:
-        return out
-
-    # No "code=" anywhere: the labels themselves are the values.
-    return {
-        part.strip(): part.strip()
-        for part in text.split(",")
-        if part.strip()
-    }
-
-
+    for seg in segments:
+        code, label = seg.split("=", 1)
+        code, label = code.strip(), label.strip().rstrip(",;").strip()
+        if code.upper() == "BLANK":
+            code = ""
+        if not label:
+            raise CodeKeyError(f"{field or '?'}: code {code!r} has an empty label")
+        if "=" in label:
+            raise CodeKeyError(
+                f"{field or '?'}: label for {code!r} contains '=' ({label!r}); this is what "
+                "CFB's missing-separator defect looks like -- add a KNOWN_REPAIRS entry"
+            )
+        if code and re.search(r"\s", code):
+            raise CodeKeyError(f"{field or '?'}: code {code!r} contains whitespace")
+        if code in out:
+            raise CodeKeyError(f"{field or '?'}: duplicate code {code!r}")
+        out[code] = label
+    return out
 def parse_key_csv(path: str | Path) -> dict[str, dict]:
     """Parse the key CSV into {FIELD_NAME: {column, type, description, values}}.
 
