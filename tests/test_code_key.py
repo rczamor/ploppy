@@ -204,3 +204,19 @@ def test_codes_with_hyphens_and_underscores_survive():
     """[A-Za-z0-9]+ silently truncated these to their tail. This file's own field
     names include RR-IND, SEG-IND and INT_C_CODE, so such codes are plausible."""
     assert parse_enumeration("AB-1=Label; C_2=Foo") == {"AB-1": "Label", "C_2": "Foo"}
+
+
+def test_codes_json_is_in_sync_with_the_vendored_key(repo_root):
+    """codes.json must be exactly what the parser produces. Regenerate with:
+
+        ./.venv/bin/python3 -m src.vocab.code_key --write
+    """
+    import json
+
+    from src.vocab.code_key import build_codes
+
+    expected = build_codes(repo_root / "data" / "reference" / "Key-Contribution.csv")
+    actual = json.loads(
+        (repo_root / "src" / "vocab" / "codes.json").read_text(encoding="utf-8")
+    )
+    assert actual == expected, "codes.json is stale; re-run the generator"

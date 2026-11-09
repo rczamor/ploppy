@@ -1,0 +1,412 @@
+{
+  "fields": {
+    "ADJTYPECD": {
+      "column": 49,
+      "description": "Schedule M /Adjustment Type Code: [0=Unknown; 1=Returned Check 2=Refund; 5=Other]",
+      "type": "Character",
+      "values": {
+        "0": "Unknown",
+        "1": "Returned Check",
+        "2": "Refund",
+        "5": "Other"
+      }
+    },
+    "AMNT": {
+      "column": 29,
+      "description": "Amount",
+      "type": "Numeric",
+      "values": {}
+    },
+    "APARTMENT": {
+      "column": 18,
+      "description": "Contributor's Apartment Number - If  C_CODE = IND, CAN, FAM or SPO, Then field = Blank",
+      "type": "Character",
+      "values": {}
+    },
+    "BOROUGHCD": {
+      "column": 19,
+      "description": "Contributor's Borough Code: [K=Brooklyn; M=Manhattan; Q=Queens; S=Staten Island; X=Bronx; Z=Outside New York City]",
+      "type": "Character",
+      "values": {
+        "K": "Brooklyn",
+        "M": "Manhattan",
+        "Q": "Queens",
+        "S": "Staten Island",
+        "X": "Bronx",
+        "Z": "Outside New York City"
+      }
+    },
+    "CANCLASS": {
+      "column": 4,
+      "description": "Campaign Finance Program Classification: [Participant, Non-Participant, Limited Participant, Undetermined]",
+      "type": "Character",
+      "values": {
+        "Limited Participant": "Limited Participant",
+        "Non-Participant": "Non-Participant",
+        "Participant": "Participant",
+        "Undetermined": "Undetermined"
+      }
+    },
+    "CITY": {
+      "column": 20,
+      "description": "Contributor's City, Schedule N - Vendor's City",
+      "type": "Character",
+      "values": {}
+    },
+    "COMMITTEE": {
+      "column": 6,
+      "description": "Committee ID, assigned by the CFB",
+      "type": "Character",
+      "values": {}
+    },
+    "C_CODE": {
+      "column": 15,
+      "description": "Contributor Type: [CAN=Candidate; CORP=Corporation; EMPO=Labor Union; FAM=Candidate's Family; IND=Individual; LLC=Limited Liability Company; OTHR=Other; PART=Partnership; PCOMC=Candidate Committee; PCOMP=Political Action Committee; PCOMZ=Party Committee; SPO=Candidate's Spouse; UNKN=Unknown]",
+      "type": "Character",
+      "values": {
+        "CAN": "Candidate",
+        "CORP": "Corporation",
+        "EMPO": "Labor Union",
+        "FAM": "Candidate's Family",
+        "IND": "Individual",
+        "LLC": "Limited Liability Company",
+        "OTHR": "Other",
+        "PART": "Partnership",
+        "PCOMC": "Candidate Committee",
+        "PCOMP": "Political Action Committee",
+        "PCOMZ": "Party Committee",
+        "SPO": "Candidate's Spouse",
+        "UNKN": "Unknown"
+      }
+    },
+    "DATE": {
+      "column": 12,
+      "description": "Date Received",
+      "type": "Date",
+      "values": {}
+    },
+    "ELECTION": {
+      "column": 1,
+      "description": "Election Cycle",
+      "type": "Character",
+      "values": {}
+    },
+    "EMPCITY": {
+      "column": 27,
+      "description": "Contributor's Employer's City",
+      "type": "Character",
+      "values": {}
+    },
+    "EMPNAME": {
+      "column": 24,
+      "description": "Contributor's Employer",
+      "type": "Character",
+      "values": {}
+    },
+    "EMPSTATE": {
+      "column": 28,
+      "description": "Contributor's Employer's State",
+      "type": "Character",
+      "values": {}
+    },
+    "EMPSTRNAME": {
+      "column": 26,
+      "description": "Contributor's Employer's Street Name",
+      "type": "Character",
+      "values": {}
+    },
+    "EMPSTRNO": {
+      "column": 25,
+      "description": "Contributor's Employer's Street Number",
+      "type": "Character",
+      "values": {}
+    },
+    "EXEMPTCD": {
+      "column": 48,
+      "description": "Exempt Code: [C=Compliance Costs; E=Previous Election Costs; P=Petition Challenges; S=Constituent Services; U=Unknown; Blank = Not Exempt]",
+      "type": "Character",
+      "values": {
+        "": "Not Exempt",
+        "C": "Compliance Costs",
+        "E": "Previous Election Costs",
+        "P": "Petition Challenges",
+        "S": "Constituent Services",
+        "U": "Unknown"
+      }
+    },
+    "FILING": {
+      "column": 7,
+      "description": "Disclosure Statement Filing Period",
+      "type": "Numeric",
+      "values": {}
+    },
+    "INTAPTNO": {
+      "column": 37,
+      "description": "Intermediary's Apartment Number  \nIf C_CODE = IND, CAN, FAM or SPO, Then field = Blank",
+      "type": "Character",
+      "values": {}
+    },
+    "INTCITY": {
+      "column": 38,
+      "description": "Intermediary's City",
+      "type": "Character",
+      "values": {}
+    },
+    "INTEMPCITY": {
+      "column": 44,
+      "description": "Intermediary's Employer City",
+      "type": "Character",
+      "values": {}
+    },
+    "INTEMPNAME": {
+      "column": 41,
+      "description": "Intermediary's Employer Name",
+      "type": "Character",
+      "values": {}
+    },
+    "INTEMPST": {
+      "column": 45,
+      "description": "Intermediary's Employer State",
+      "type": "Character",
+      "values": {}
+    },
+    "INTEMPSTNM": {
+      "column": 43,
+      "description": "Intermediary's Employer Street Name",
+      "type": "Character",
+      "values": {}
+    },
+    "INTEMPSTNO": {
+      "column": 42,
+      "description": "Intermediary's Employer Street Number",
+      "type": "Character",
+      "values": {}
+    },
+    "INTERMNAME": {
+      "column": 34,
+      "description": "Intermediary's Name (if any)",
+      "type": "Character",
+      "values": {}
+    },
+    "INTERMNO": {
+      "column": 33,
+      "description": "Intermediary Number, assigned by candidate",
+      "type": "Character",
+      "values": {}
+    },
+    "INTOCCUPA": {
+      "column": 46,
+      "description": "Intermediary's Occupation",
+      "type": "Character",
+      "values": {}
+    },
+    "INTST": {
+      "column": 39,
+      "description": "Intermediary's State",
+      "type": "Character",
+      "values": {}
+    },
+    "INTSTRNM": {
+      "column": 36,
+      "description": "Intermediary's Street Name  \nIf C_CODE = IND, CAN, FAM or SPO, Then field = Blank",
+      "type": "Character",
+      "values": {}
+    },
+    "INTSTRNO": {
+      "column": 35,
+      "description": "Intermediary's Street Number, assigned by candidate \nIf C_CODE = IND, CAN, FAM or SPO, Then field = Blank",
+      "type": "Character",
+      "values": {}
+    },
+    "INTZIP": {
+      "column": 40,
+      "description": "Intermediary's Zip Code",
+      "type": "Character",
+      "values": {}
+    },
+    "INT_C_CODE": {
+      "column": 52,
+      "description": "Intermediary's Name Code",
+      "type": "Character",
+      "values": {}
+    },
+    "MATCHAMNT": {
+      "column": 30,
+      "description": "Matchable Amount of Contribution",
+      "type": "Numeric",
+      "values": {}
+    },
+    "NAME": {
+      "column": 14,
+      "description": "Contributor's Name",
+      "type": "Character",
+      "values": {}
+    },
+    "OCCUPATION": {
+      "column": 23,
+      "description": "Contributor's Occupation",
+      "type": "Character",
+      "values": {}
+    },
+    "OFFICECD": {
+      "column": 2,
+      "description": "Office Sought: [1=Mayor; 11=Mayor Program A (EC2021 Only);2=Public Advocate;22=Public Advocate Program A (EC2021 Only);3=Comptroller; 33=Comptroller Program A (EC2021 Only);4=Borough President; 44=Borough President Program A (EC2021 Only);5=City Council; 55=City Council Program A (EC2021 Only);6=Undeclared; 66=Undeclared Program A (EC2021 Only);IS=Independent Spender]",
+      "type": "Character",
+      "values": {
+        "1": "Mayor",
+        "11": "Mayor Program A (EC2021 Only)",
+        "2": "Public Advocate",
+        "22": "Public Advocate Program A (EC2021 Only)",
+        "3": "Comptroller",
+        "33": "Comptroller Program A (EC2021 Only)",
+        "4": "Borough President",
+        "44": "Borough President Program A (EC2021 Only)",
+        "5": "City Council",
+        "55": "City Council Program A (EC2021 Only)",
+        "6": "Undeclared",
+        "66": "Undeclared Program A (EC2021 Only)",
+        "IS": "Independent Spender"
+      }
+    },
+    "PAGENO": {
+      "column": 9,
+      "description": "Page Number of schedule on which information was reported (paper filings only)",
+      "type": "Numeric",
+      "values": {}
+    },
+    "PAY_METHOD": {
+      "column": 32,
+      "description": "Method of Payment: [0=Unknown; 1=Cash; 2=Check; 3=Other; 4=Credit Card; 5=Money Order]",
+      "type": "Numeric",
+      "values": {
+        "0": "Unknown",
+        "1": "Cash",
+        "2": "Check",
+        "3": "Other",
+        "4": "Credit Card",
+        "5": "Money Order"
+      }
+    },
+    "PREVAMNT": {
+      "column": 31,
+      "description": "Total of Previous Contributions",
+      "type": "Numeric",
+      "values": {}
+    },
+    "PURPOSECD": {
+      "column": 47,
+      "description": "Purpose Code (for Schedule D/In-Kind Contributions): [ADVAN=Advance Repayment; CMAIL=Campaign Mailings; CMISC=Campaign Miscellaneous; CNTRB=Political Contributions; COMPL=Compliance Cost; CONSL=Campaign Consultants; CONSV=Constituent Services; FUNDR=Fundraising; INTER=Interest Expenses; LITER=Campaign Literature; NQUAL=Non Qualified Expenditures; OFFCE=Office Expenses; OTHER=Other; PETIT=Petition Expenses; POLLS=Polling Costs; POSTA=Postage Expenses; PRINT=Printing Expenses; PROFL=Professional Services; RADIO=Radio Ads; RENTO=Office Rent; TVADS=Television Ads; UNKN=Unknown; VOTER=Voter Registration; WAGES=Campaign Workers Salaries]",
+      "type": "Character",
+      "values": {
+        "ADVAN": "Advance Repayment",
+        "CMAIL": "Campaign Mailings",
+        "CMISC": "Campaign Miscellaneous",
+        "CNTRB": "Political Contributions",
+        "COMPL": "Compliance Cost",
+        "CONSL": "Campaign Consultants",
+        "CONSV": "Constituent Services",
+        "FUNDR": "Fundraising",
+        "INTER": "Interest Expenses",
+        "LITER": "Campaign Literature",
+        "NQUAL": "Non Qualified Expenditures",
+        "OFFCE": "Office Expenses",
+        "OTHER": "Other",
+        "PETIT": "Petition Expenses",
+        "POLLS": "Polling Costs",
+        "POSTA": "Postage Expenses",
+        "PRINT": "Printing Expenses",
+        "PROFL": "Professional Services",
+        "RADIO": "Radio Ads",
+        "RENTO": "Office Rent",
+        "TVADS": "Television Ads",
+        "UNKN": "Unknown",
+        "VOTER": "Voter Registration",
+        "WAGES": "Campaign Workers Salaries"
+      }
+    },
+    "RECIPID": {
+      "column": 3,
+      "description": "Receipient ID, assigned by the CFB",
+      "type": "Character",
+      "values": {}
+    },
+    "RECIPNAME": {
+      "column": 5,
+      "description": "Recipient's Name",
+      "type": "Character",
+      "values": {}
+    },
+    "REFNO": {
+      "column": 11,
+      "description": "Transaction Reference Number",
+      "type": "Character",
+      "values": {}
+    },
+    "REFUNDDATE": {
+      "column": 13,
+      "description": "Date of Refund/Loan forgiven",
+      "type": "Date",
+      "values": {}
+    },
+    "RR-IND": {
+      "column": 50,
+      "description": "Runoff/Rerun Indicator",
+      "type": "Character",
+      "values": {}
+    },
+    "SCHEDULE": {
+      "column": 8,
+      "description": "Schedule: [ABC=Monetary Contributions; D=In-Kind Contributions; G=Transfers In; K=Loans/Liabilities Forgiven; M=Receipt Adjustments; N=Outstanding Liabilities; ICONT=Monetary Contributions; IEXPF=In-Kind (Bill Paid); IDISC=In-Kind (Vendor Discount); IREF=Refund]",
+      "type": "Character",
+      "values": {
+        "ABC": "Monetary Contributions",
+        "D": "In-Kind Contributions",
+        "G": "Transfers In",
+        "ICONT": "Monetary Contributions",
+        "IDISC": "In-Kind (Vendor Discount)",
+        "IEXPF": "In-Kind (Bill Paid)",
+        "IREF": "Refund",
+        "K": "Loans/Liabilities Forgiven",
+        "M": "Receipt Adjustments",
+        "N": "Outstanding Liabilities"
+      }
+    },
+    "SEG-IND": {
+      "column": 51,
+      "description": "Segregated Indicator",
+      "type": "Character",
+      "values": {}
+    },
+    "SEQUENCENO": {
+      "column": 10,
+      "description": "Sequence Number on page of schedule on which information was reported (paper filings only)",
+      "type": "Numeric",
+      "values": {}
+    },
+    "STATE": {
+      "column": 21,
+      "description": "Contributor's State, Schedule N - Vendor's State",
+      "type": "Character",
+      "values": {}
+    },
+    "STRNAME": {
+      "column": 17,
+      "description": "Contributor's Street Name - If  C_CODE = IND, CAN, FAM or SPO, Then field = Blank",
+      "type": "Character",
+      "values": {}
+    },
+    "STRNO": {
+      "column": 16,
+      "description": "Contributor's Street Number - If  C_CODE = IND, CAN, FAM or SPO, Then field = Blank",
+      "type": "Character",
+      "values": {}
+    },
+    "ZIP": {
+      "column": 22,
+      "description": "Contributor's Zip Code",
+      "type": "Character",
+      "values": {}
+    }
+  },
+  "source": "https://www.nyccfb.info/DataLibrary/Key-Contribution.csv"
+}
