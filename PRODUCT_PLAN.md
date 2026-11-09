@@ -1,5 +1,11 @@
 # Ploppy → product: plan
 
+> **Superseded.** This plan describes the pay-to-play screening product, which moved to
+> Blocade. Ploppy is now a research and visualization tool over NYC/NYS donation data.
+> The current design is `docs/superpowers/specs/2026-11-08-ploppy-research-tool-design.md`,
+> which supersedes this document in its entirety. Kept for the verified figures and the
+> market analysis in it; do not build from it.
+
 Produced from a 12-agent analysis (grounding → four competing strategies → three judging
 lenses → synthesis → adversarial critique). Every number below is either verified against
 the repo and live data sources, or explicitly marked as an assumption.
