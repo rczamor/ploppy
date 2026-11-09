@@ -1798,9 +1798,18 @@ jobs:
 
       - name: Verify the generated artifacts are in sync
         run: |
-          python -m src.vocab.code_key --write
-          python -m src.vocab.sql_gen --write
-          git diff --exit-code -- src/vocab/codes.json src/vocab/generated/
+          # Compare OUT OF TREE. Regenerating in place and then diffing can
+          # never fail: after the regen step the files on disk always equal the
+          # generator's output, so the check asserts nothing and
+          # test_generated_files_are_in_sync becomes a local-only guard.
+          python -m src.vocab.code_key --write --out "$RUNNER_TEMP/codes.json"
+          python -m src.vocab.sql_gen --write --out-dir "$RUNNER_TEMP/generated"
+          diff -u  src/vocab/codes.json "$RUNNER_TEMP/codes.json"
+          diff -ru src/vocab/generated  "$RUNNER_TEMP/generated"
+          # git diff cannot see an UNTRACKED file, so a forgotten `git add` of a
+          # newly generated artifact would otherwise leave CI green on a commit
+          # that does not contain it.
+          test -z "$(git status --porcelain)" || { git status --short; exit 1; }
 
       - name: Run tests
         run: python -m pytest -v
@@ -1867,6 +1876,46 @@ git push -u origin claude/application-startup-a6fde1
 Then read the Actions log. A red build here is a real failure, not flake — most likely a codepoint outside the generated `translate()` table that the local run did not exercise, or a generated file committed stale (which `git diff --exit-code` catches).
 
 ---
+
+## The gap this plan opens, and the next plan must close first
+
+**`vocab.name_norm` is wired into nothing, and the column it is meant to replace is 97%
+incompatible with it.** This is the highest-ranked risk on the branch, above every Unicode
+edge case, and it is measured rather than inferred.
+
+`src/database/db_manager_v2.py` has its own `normalize_name`, used at lines 107, 158, 236 and
+367. It keeps the comma on purpose — `re.sub(r'[^\w\s,]', '', ...)` whitelists `,` — and it
+also strips `JR`/`SR`/`III`/`II` and rewrites `COMMITTEE`→`CMTE` and
+`POLITICAL ACTION COMMITTEE`→`PAC`. So it is a semantically different normalizer, not a
+stricter one. Measured against the live `contributors` table over 300,000 rows:
+
+| | |
+|---|---|
+| stored `normalized_name` rows sampled | 300,000 |
+| rows where `vocab.name_norm` disagrees | **290,980 (97.0%)** |
+| example | stored `DENDY, HELEN` vs `vocab` `DENDY HELEN` |
+
+Two further normalizers exist in `scripts/`: `fast_intermediary_input`-style
+`normalized_name = name.upper()` (comma retained) and `fast_voter_import.py`'s
+`normalize_name_fast`.
+
+So the moment anything joins `contributors.normalized_name` to a value produced by
+`vocab.name_norm`, **97% of rows fail to match — silently, zero rows, no error.** That is
+verbatim the `SMITH, JOHN A` vs `SMITH JOHN A` failure this plan's own rationale cites, now
+confirmed to already exist in the database.
+
+This plan deliberately did not fix it: `db_manager_v2.py` was frozen byte-identical, and a
+backfill of a 946,403-row dimension is a migration, not a label change. But the next plan
+cannot build an identity schema on top of this without doing two things **first**:
+
+1. Backfill every existing `normalized_name` column through `vocab.name_norm`, or add a
+   second column and migrate readers, deciding explicitly what happens to the `JR`/`CMTE`
+   rewrites the old normalizer applied.
+2. Add a check that no script computes its own normalization — otherwise a fourth normalizer
+   appears the next time someone needs one, and the layer silently stops being shared.
+
+Until then, treat `vocab.name_norm` as correct but unadopted. A correct normalizer that
+nothing calls prevents no failures at all.
 
 ## The one step not generated
 

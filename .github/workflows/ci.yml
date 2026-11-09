@@ -48,9 +48,18 @@ jobs:
 
       - name: Verify the generated artifacts are in sync
         run: |
-          python -m src.vocab.code_key --write
-          python -m src.vocab.sql_gen --write
-          git diff --exit-code -- src/vocab/codes.json src/vocab/generated/
+          # Compare OUT OF TREE. Regenerating in place and then diffing can
+          # never fail: after the regen step the files on disk always equal the
+          # generator's output, so the check asserts nothing and
+          # test_generated_files_are_in_sync becomes a local-only guard.
+          python -m src.vocab.code_key --write --out "$RUNNER_TEMP/codes.json"
+          python -m src.vocab.sql_gen --write --out-dir "$RUNNER_TEMP/generated"
+          diff -u  src/vocab/codes.json "$RUNNER_TEMP/codes.json"
+          diff -ru src/vocab/generated  "$RUNNER_TEMP/generated"
+          # git diff cannot see an UNTRACKED file, so a forgotten `git add` of a
+          # newly generated artifact would otherwise leave CI green on a commit
+          # that does not contain it.
+          test -z "$(git status --porcelain)" || { git status --short; exit 1; }
 
       - name: Run tests
         run: python -m pytest -v
