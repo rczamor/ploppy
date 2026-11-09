@@ -1715,8 +1715,8 @@ Expected: the Postgres-marked tests run and pass. If they all SKIP, the Postgres
 - [ ] **Step 4: Confirm the full suite is green**
 
 Run: `python3 -m pytest -v`
-Expected: all tests pass. The count should be about **150** with Postgres available
-(44 code_key + 74 code_mappings + 3 program_ab + 31 normalize + 3 sql_gen + 44 cross_engine).
+Expected: all tests pass. The count should be about **206** with Postgres available
+(44 code_key + 74 code_mappings + 3 program_ab + 34 normalize + 4 sql_gen + 50 cross_engine).
 Treat these counts as a sanity check, not a contract: a number materially below them means
 tests were skipped or not collected, which is precisely what `-ra` and
 `PLOPPY_REQUIRE_ENGINES=1` exist to make visible.
@@ -1808,15 +1808,21 @@ jobs:
 
 The Python version differs from local on purpose (CI 3.13, local 3.12.7), and that is safe
 for the generated artifacts: the `translate()` table is derived from `unicodedata`, and it
-comes out byte-identical under Unicode 13.0, 15.0 and 15.1 — same 504 folds, 114 deletes,
+comes out byte-identical under Unicode 13.0, 15.0 and 15.1 — same 504 folds, 115 deletes,
 same digest. Checked across Python 3.9.6, 3.12.7 and 3.13.0 rather than assumed, because if
 it did vary, `git diff --exit-code` would fail CI on a correctly generated file and the
 cause would be invisible.
 
 Two things that workflow does deliberately. It **regenerates and diffs** the artifacts, so a hand-edited `codes.json` or `name_norm_pg.sql` fails the build rather than silently diverging from its source. And it stands up a real Postgres, because the cross-engine test is worthless if the Postgres leg skips — on PG17, `fuzzystrmatch` would also give `daitch_mokotoff`, which a later plan needs.
 
-Note `tests/test_program_ab.py::test_both_programs_have_2021_contributions` will SKIP in CI: the service database is empty, and loading 2.1M rows into CI is a later plan's decision. It runs locally.
-
+`tests/test_program_ab.py`'s data-backed test SKIPS in CI, but only because it guards on
+`to_regclass('public.cfb_contributions')` being non-NULL. An earlier draft of this plan
+claimed it would skip on its own; it would not — it was marked `postgres` with no in-body
+guard, so against CI's empty service database it FAILED with `UndefinedTable`. Verified by
+running the suite against a scratch empty database: `1 failed, 205 passed`. The guard draws
+the right line: a missing **engine** is a failure, because the engine is part of what we
+ship, while missing **data** is a skip, because the data is not in the repo. `-ra` in
+`addopts` prints the reason, so the skip is visible rather than silent.
 - [ ] **Step 2: Verify the workflow is valid YAML**
 
 ```bash
