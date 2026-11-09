@@ -32,6 +32,7 @@ import unicodedata
 
 __all__ = [
     "DELETE_CHARS",
+    "EXPAND_FOLDS",
     "GOLDEN_VECTORS",
     "fold_ascii",
     "name_norm",
@@ -47,6 +48,29 @@ __all__ = [
 # That mismatch made 'A'+U+034F+'B' normalize to 'A B' in Python and 'AB' in
 # SQL: a word split in half in one engine only.
 DELETE_CHARS = "�­͏"
+
+#: Characters whose uppercase is more than one character. Python's str.upper()
+#: performs FULL case mapping and expands these; SQL upper() in both Postgres
+#: and DuckDB performs SIMPLE case mapping and does not, after which the
+#: [^A-Z0-9] step turns each into a space. That made Python the outlier:
+#:     'Weiß, Hans' -> python 'WEISS HANS', postgres/duckdb 'WEI HANS'
+#: Expanding explicitly here, rather than relying on upper()'s implicit
+#: behaviour, is what lets the generated SQL reproduce it. Expanding is also the
+#: better normalization: Weiß genuinely should match Weiss.
+#: Enumerated from unicodedata over U+0020..U+1FFFF: of the 102 characters with
+#: a multi-character uppercase, these 8 are the only ones expanding to ASCII
+#: letters. The rest expand to non-ASCII and become spaces in all three engines
+#: alike, so they need no entry.
+EXPAND_FOLDS = {
+    "ß": "ss",
+    "ﬀ": "ff",
+    "ﬁ": "fi",
+    "ﬂ": "fl",
+    "ﬃ": "ffi",
+    "ﬄ": "ffl",
+    "ﬅ": "st",
+    "ﬆ": "st",
+}
 
 #: Single-character folds NFD cannot express. A stroke or bar is part of the
 #: letter, not a combining mark, so NFD leaves these intact and the
@@ -71,6 +95,8 @@ def fold_ascii(text: str) -> str:
     """Delete the no-information characters, fold strokes, strip combining marks."""
     for ch in DELETE_CHARS:
         text = text.replace(ch, "")
+    for a, b in EXPAND_FOLDS.items():
+        text = text.replace(a, b)
     text = "".join(STROKE_FOLDS.get(c, c) for c in text)
     decomposed = unicodedata.normalize("NFD", text)
     return "".join(c for c in decomposed if not unicodedata.combining(c))
@@ -144,6 +170,9 @@ GOLDEN_VECTORS: list[tuple[str | None, str | None]] = [
     ("JOSE MU�OZ", "JOSE MUOZ"),              # the similarity case
     ("SMITH­JONES", "SMITHJONES"),            # soft hyphen deleted
     ("A\u034fB", "AB"),                         # U+034F: combining class 0, so NFD alone misses it
+    ("Wei\u00df, Hans", "WEISS HANS"),        # str.upper() expands \u00df; SQL upper() does not
+    ("Stra\u00dfe 1 LLC", "STRASSE 1 LLC"),
+    ("O\ufb03ce, Jane", "OFFICE JANE"),       # U+FB03 ffi ligature
     ("1199 SEIU", "1199 SEIU"),                    # digits survive
     ("FRIENDS OF JANE DOE 2025", "FRIENDS OF JANE DOE 2025"),
     ("...", None),                                 # punctuation only

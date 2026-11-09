@@ -11,7 +11,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from src.vocab.normalize import DELETE_CHARS, translate_pairs
+from src.vocab.normalize import DELETE_CHARS, EXPAND_FOLDS, translate_pairs
 
 __all__ = ["duckdb_sql", "postgres_sql", "main"]
 
@@ -44,6 +44,17 @@ def _duckdb_literal(text: str) -> str:
     return "'" + text.replace("'", "''") + "'"
 
 
+def _expansion_chain(expr: str, literal) -> str:
+    """Nest one replace() per EXPAND_FOLDS entry around `expr`.
+
+    Generated rather than written out, for the same reason the translate table
+    is: one definition, three implementations.
+    """
+    for src_text, dst_text in EXPAND_FOLDS.items():
+        expr = f"replace({expr}, {literal(src_text)}, {literal(dst_text)})"
+    return expr
+
+
 def postgres_sql() -> str:
     src, dst = translate_pairs()
     return f"""{_HEADER}
@@ -54,7 +65,7 @@ CREATE SCHEMA IF NOT EXISTS vocab;
 -- with no counterpart in the second, which is how U+FFFD and U+00AD are removed.
 CREATE OR REPLACE FUNCTION vocab.fold_ascii(src text)
 RETURNS text LANGUAGE sql IMMUTABLE PARALLEL SAFE STRICT AS $$
-  SELECT translate(src, {_pg_literal(src)}, {_pg_literal(dst)});
+  SELECT translate({_expansion_chain('src', _pg_literal)}, {_pg_literal(src)}, {_pg_literal(dst)});
 $$;
 
 CREATE OR REPLACE FUNCTION vocab.name_norm(src text)
@@ -86,7 +97,7 @@ def duckdb_sql() -> str:
     src, dst = translate_pairs()
     return f"""{_HEADER}
 CREATE OR REPLACE MACRO fold_ascii(s) AS
-  translate(s, {_duckdb_literal(src)}, {_duckdb_literal(dst)});
+  translate({_expansion_chain('s', _duckdb_literal)}, {_duckdb_literal(src)}, {_duckdb_literal(dst)});
 
 CREATE OR REPLACE MACRO name_norm(s) AS
   nullif(trim(regexp_replace(upper(fold_ascii(s)), '[^A-Z0-9]+', ' ', 'g')), '');

@@ -77,3 +77,26 @@ def test_delete_chars_and_the_translate_table_agree():
         f"table-only={sorted(deleted_by_table - deleted_by_python)!r} "
         f"python-only={sorted(deleted_by_python - deleted_by_table)!r}"
     )
+
+
+def test_every_multichar_uppercase_that_matters_is_expanded_explicitly():
+    """The one step not generated from the shared table is upper(), and the
+    engines disagree about it: Python does full case mapping, SQL does simple.
+    So every character whose uppercase is multi-character AND lands in [A-Z]
+    must be expanded explicitly in EXPAND_FOLDS, or Python will diverge from
+    both engines. Derived from unicodedata so a new one cannot be missed."""
+    import unicodedata
+
+    from src.vocab.normalize import EXPAND_FOLDS
+
+    needs_expanding = {
+        chr(cp)
+        for cp in range(0x20, 0x20000)
+        if len(chr(cp).upper()) > 1
+        and chr(cp).upper().isascii()
+        and chr(cp).upper().isalpha()
+    }
+    assert needs_expanding == set(EXPAND_FOLDS), (
+        f"missing={sorted(needs_expanding - set(EXPAND_FOLDS))!r} "
+        f"extra={sorted(set(EXPAND_FOLDS) - needs_expanding)!r}"
+    )
