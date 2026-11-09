@@ -1868,6 +1868,34 @@ Then read the Actions log. A red build here is a real failure, not flake — mos
 
 ---
 
+## The one step not generated
+
+Every part of the fold is generated from one table, with one exception: **`upper()` is
+applied independently by each engine**, and the three do not agree about it. Python's
+`str.upper()` performs *full* case mapping (one-to-many); SQL `upper()` in both Postgres and
+DuckDB performs *simple* case mapping. Measured before the fix:
+
+```
+'Weiß, Hans'  ->  python 'WEISS HANS'   postgres 'WEI HANS'   duckdb 'WEI HANS'
+'Oﬃce, Jane'  ->  python 'OFICE JANE'   postgres 'O CE JANE'  duckdb 'O CE JANE'
+```
+
+Note the shape: Postgres and DuckDB agreed with each other and **Python was the outlier**,
+the reverse of every other divergence in this plan. `Weiß` is a real surname, and a name
+that normalizes two ways is a join that silently returns nothing — exactly the failure this
+plan exists to prevent, surviving in the one place the generator did not reach.
+
+The fix enumerates the affected characters from `unicodedata` rather than guessing: of the
+102 codepoints in U+0020..U+1FFFF whose uppercase is multi-character, exactly **8** expand to
+ASCII letters (`ß` and the ff/fi/fl/ffi/ffl/st ligatures). Those are expanded explicitly in
+`EXPAND_FOLDS` and reproduced in both dialects by a generated `replace()` chain. The other 94
+expand to non-ASCII and become spaces in all three engines alike, so they need no entry. A
+test re-derives that set from `unicodedata`, so a future Unicode addition fails loudly
+instead of silently diverging.
+
+Expanding is also the better normalization, not merely the consistent one: `Weiß` genuinely
+should match `Weiss`.
+
 ## Definition of done
 
 - [ ] `PLOPPY_REQUIRE_ENGINES=1 ./.venv/bin/python3 -m pytest -v` passes locally. Under that
@@ -1907,13 +1935,13 @@ Named here so the next plan does not have to rediscover them:
   the labels does not help a caller that never asks. This belongs with the ETL pipeline
   plan, which owns the loader; recorded here with the measured count so it is not
   rediscovered. Note the fix is `is not None`, not a truthiness test.
-- **Does not fold multi-character ligatures.** `translate()` is strictly 1:1, so Æ→AE,
-  Œ→OE, ß→SS and Þ→TH cannot be expressed in it. All three engines turn them into a
-  space instead, so they stay *consistent* and cross-engine equality holds -- the fold is
-  simply lossy there. Fixing it needs a nested `replace()` chain in both dialects plus the
-  Python equivalent, and these forms are vanishingly rare in NYC/NYS filer names, unlike the
-  strokes in `STROKE_FOLDS`, which drop a letter from common Polish and Scandinavian
-  surnames. Recorded so the identity plan can decide.
+- **Does not fold multi-character ligatures *in the translate table*.** `translate()` is
+  strictly 1:1, so Æ→AE and Œ→OE cannot be expressed there; all three engines turn them
+  into a space consistently, so cross-engine equality holds and the fold is simply lossy.
+  The eight characters whose *uppercase* is multi-character and ASCII (ß and the f/st
+  ligatures) are a different matter and ARE handled, via `EXPAND_FOLDS` and a generated
+  `replace()` chain — because there Python and SQL actively disagreed rather than merely
+  being lossy together. See § the `upper()` asymmetry below.
 - **Does not correct `ELECTION_TYPES`.** The original map sends election-token
   suffixes `B` and `C` to "General" when they are special elections, and `parse_election_cycle`
   persists the result into `elections.election_type` (`db_manager_v2.py:79`). Fixing the map
