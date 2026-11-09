@@ -6,7 +6,9 @@
 
 **Architecture:** Two small packages under `src/vocab/`. `code_key.py` parses CFB's published `Key-Contribution.csv` into `codes.json`, a committed, diffable artifact; `code_mappings.py` is rewritten as a thin accessor over it, keeping its existing public API so no caller breaks. `normalize.py` holds the canonical Python definition of `name_norm`, and `sql_gen.py` emits a Postgres `IMMUTABLE` function and a DuckDB macro from that single definition. A golden-vector test asserts all three implementations produce identical output.
 
-**Tech Stack:** Python 3.12+, pytest 9, psycopg (already installed), duckdb 2.0.0, PostgreSQL 14+ locally (PG16+ required later, not here), GitHub Actions.
+**Tech Stack:** Python 3.12+, pytest 9, psycopg 3.3, duckdb 2.0.0, PostgreSQL 14+ locally (PG16+ required later, not here), GitHub Actions.
+
+**Environment — measured 2026-11-08, not assumed.** `python3` on PATH is 3.13.0 and has pytest but **neither duckdb nor psycopg**; the repo's uv-managed `.venv` (3.12.7) was empty. Both engines are now installed into `.venv`: pytest 9.2.0, duckdb 2.0.0, psycopg 3.3.8. Postgres is 14.13 (Homebrew), and the `ploppy` database already carries `unaccent 1.1`, `pg_trgm 1.6` and `fuzzystrmatch 1.1` — which is why `daitch_mokotoff` (1.2, PG16+) is out of scope here. **Every `python3` command below means `./.venv/bin/python3`.** Bare `python3` runs the suite with both engine legs skipping. An earlier draft of this line claimed psycopg was already installed; it was not.
 
 **Scope:** This is plan 1 of several. It implements build-order steps 1 and 2 from `docs/superpowers/specs/2026-11-08-ploppy-research-tool-design.md` (committed `fbada2a`). It needs no Vercel project, no Neon database and no Blob store — everything runs on the laptop. Later plans cover: the identity schema, the ETL pipeline, rollup semantics, the Parquet build and publish, the public surface, the private console, and district attribution.
 
@@ -66,10 +68,12 @@ Expected: FAIL — `ModuleNotFoundError: No module named 'src.vocab'` (or a coll
 [pytest]
 testpaths = tests
 python_files = test_*.py
-addopts = -q --strict-markers
+addopts = -q -ra --strict-markers
 markers =
     postgres: requires a local PostgreSQL with the ploppy database
 ```
+
+`-ra` is not cosmetic: with bare `-q` a skipped test prints as `s` with no reason, so a run that skipped every cross-engine comparison looks identical to a run that passed.
 
 Deliberately no `filterwarnings = error`: `src/utils/utils.py:65` has a known
 `SyntaxWarning: invalid escape sequence '\$'`, and turning warnings into errors would fail
@@ -93,6 +97,40 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT))
 
+#: When "1", a missing engine or an unreachable database is a FAILURE, not a skip.
+#: The definition of done requires one run with this set: a cross-engine equality
+#: suite that silently skips is worse than no suite, because it reports false
+#: confidence. CI leaves it unset for the Postgres leg only.
+STRICT_ENGINES = os.environ.get("PLOPPY_REQUIRE_ENGINES") == "1"
+
+DEFAULT_DSN = "dbname=ploppy"
+
+
+def _unavailable(reason: str) -> None:
+    """Fail under PLOPPY_REQUIRE_ENGINES=1, otherwise skip. Always raises."""
+    (pytest.fail if STRICT_ENGINES else pytest.skip)(reason, pytrace=False)
+
+
+def _version(module_name: str) -> str:
+    try:
+        return __import__(module_name).__version__
+    except Exception:
+        return "not installed"
+
+
+def pytest_report_header() -> list[str]:
+    """Make the interpreter and the engines visible without an extra command.
+
+    Bare `python3` here has pytest but neither engine, so without this header a
+    run that skipped everything is indistinguishable from a run that passed.
+    """
+    return [
+        f"interpreter: {sys.executable}",
+        "engines: duckdb {}, psycopg {} (PLOPPY_REQUIRE_ENGINES={})".format(
+            _version("duckdb"), _version("psycopg"), "1" if STRICT_ENGINES else "0"
+        ),
+    ]
+
 
 @pytest.fixture(scope="session")
 def repo_root() -> Path:
@@ -101,7 +139,10 @@ def repo_root() -> Path:
 
 @pytest.fixture(scope="session")
 def duckdb_conn():
-    duckdb = pytest.importorskip("duckdb")
+    try:
+        import duckdb
+    except ImportError:
+        _unavailable("duckdb is not installed")
     conn = duckdb.connect()
     yield conn
     conn.close()
@@ -109,18 +150,29 @@ def duckdb_conn():
 
 @pytest.fixture(scope="session")
 def pg_conn():
-    """A connection to the local ploppy database, or skip.
+    """A connection to the local ploppy database.
 
-    Postgres is optional for this plan: the Python and DuckDB implementations are
-    the ones CI can always check. The Postgres leg runs locally and in any CI job
-    that provides PLOPPY_TEST_DSN.
+    Optional in CI, required for local verification. An explicitly set
+    PLOPPY_TEST_DSN means the caller intends Postgres to be used, so an
+    unreachable server is a failure rather than a skip. autocommit avoids one
+    bad vector aborting the transaction and cascading InFailedSqlTransaction
+    into every later test on this session-scoped connection.
     """
-    psycopg = pytest.importorskip("psycopg")
-    dsn = os.environ.get("PLOPPY_TEST_DSN", "dbname=ploppy")
     try:
-        conn = psycopg.connect(dsn)
-    except Exception as exc:  # pragma: no cover - environment dependent
-        pytest.skip(f"no Postgres at {dsn!r}: {exc}")
+        import psycopg
+    except ImportError:
+        _unavailable("psycopg is not installed")
+    dsn = os.environ.get("PLOPPY_TEST_DSN") or ""
+    explicit = bool(dsn)
+    if not dsn:
+        dsn = DEFAULT_DSN
+    try:
+        conn = psycopg.connect(dsn, autocommit=True)
+    except psycopg.OperationalError as exc:
+        reason = f"no Postgres at {dsn!r}: {exc}"
+        if explicit:
+            pytest.fail(reason, pytrace=False)
+        _unavailable(reason)
     yield conn
     conn.close()
 ```
@@ -133,7 +185,7 @@ Expected: PASS, 1 test.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add pytest.ini tests/conftest.py tests/test_normalize.py src/vocab/__init__.py
+git add pytest.ini tests/conftest.py tests/test_normalize.py src/vocab/__init__.py .gitignore
 git commit -m "test: add pytest harness and src/vocab package"
 ```
 
@@ -1570,7 +1622,10 @@ Then read the Actions log. A red build here is a real failure, not flake — mos
 
 ## Definition of done
 
-- [ ] `python3 -m pytest -v` passes locally with the Postgres legs **running**, not skipping.
+- [ ] `PLOPPY_REQUIRE_ENGINES=1 ./.venv/bin/python3 -m pytest -v` passes locally. Under that
+  variable a missing engine or an unreachable database is a **failure**, not a skip, so a green
+  run proves the duckdb and Postgres legs actually ran. The report header prints the interpreter
+  and both engine versions.
 - [ ] `git diff --exit-code -- src/vocab/codes.json src/vocab/generated/` is clean after regenerating.
 - [ ] `src/database/code_mappings.py` contains no hand-typed code dict.
 - [ ] `get_office_name("11")` returns a label containing "Program A".
