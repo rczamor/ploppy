@@ -249,7 +249,8 @@ without a diff is a silent change in meaning. Re-download it, re-run
   `[Participant, Non-Participant, Limited Participant, Undetermined]`.
 - `EXEMPTCD` writes `Blank = Not Exempt`, with spaces around the equals sign, to
   mean the empty string.
-- Row 0's first cell contains an embedded newline. The file is UTF-8 with **no**
+- Four cells contain embedded newlines: row 0's title plus three later description
+  cells (byte offsets 3298, 3405, 3517). The file is UTF-8 with **no**
   BOM — decoding with `utf-8-sig` is harmless but nothing is stripped, so no test
   should assert a BOM is removed. Line endings are mixed: 57 CRLF and 4 bare LF,
   so the file must be read with the `csv` module and `newline=''`, never with
@@ -472,7 +473,14 @@ def parse_key_csv(path: str | Path) -> dict[str, dict]:
 
 
 def build_codes(path: str | Path) -> dict:
-    """Build the codes.json payload: only the fields that carry enumerations."""
+    """Build the codes.json payload: every field CFB documents, enumerated or not.
+
+    All 52 fields are kept, with an empty ``values`` for the 43 that carry no
+    enumeration. That is deliberate: codes.json is a diffable artifact, so keeping
+    the free-text fields means a future re-download reveals when CFB *adds* an
+    enumeration to a field that previously had none. Filtering would hide exactly
+    the change worth noticing.
+    """
     key = parse_key_csv(path)
     return {
         "source": "https://www.nyccfb.info/DataLibrary/Key-Contribution.csv",
@@ -682,6 +690,22 @@ class TestPaymentMethodsWereWrongAndPartlyInvented:
         assert fabricated not in cm.PAYMENT_METHODS
 
 
+class TestBlankIsACodeNotAMissingValue:
+    def test_null_exemptcd_resolves_to_the_documented_blank_code(self):
+        """CFB documents "" as a code meaning Not Exempt, and the loader stores
+        blank as NULL on 2,123,656 of 2,123,892 rows. Treating NULL as Unknown
+        would mislabel 99.99% of the column."""
+        from src.vocab import codes as _c
+        assert _c.label("EXEMPTCD", None) == "Not Exempt"
+        assert _c.label("EXEMPTCD", "") == "Not Exempt"
+        assert _c.label("EXEMPTCD", "   ") == "Not Exempt"
+
+    def test_null_still_unknown_where_blank_is_not_a_documented_code(self):
+        """SCHEDULE documents no blank, so NULL must not borrow one."""
+        from src.vocab import codes as _c
+        assert _c.label("SCHEDULE", None) == "Unknown"
+
+
 class TestContributorCodes:
     def test_pcomp_is_a_pac(self):
         assert cm.get_contributor_type("PCOMP") == "Political Action Committee"
@@ -689,9 +713,24 @@ class TestContributorCodes:
     def test_pcomc_is_a_candidate_committee(self):
         assert cm.get_contributor_type("PCOMC") == "Candidate Committee"
 
+    def test_empo_is_a_labor_union_not_an_employee_organization(self):
+        """8,695 rows. The old label was a plausible-sounding paraphrase, which is
+        the kind of wrong that survives review because nothing looks broken."""
+        assert cm.get_contributor_type("EMPO") == "Labor Union"
+
     @pytest.mark.parametrize("code", ["CAN", "FAM", "SPO", "PCOMZ"])
     def test_previously_missing_codes_are_present(self, code):
+        """17,290 rows between them had no label at all."""
         assert code in cm.CONTRIBUTOR_CODES
+
+    @pytest.mark.parametrize("code", ["PCOM", "TRST", "ORG"])
+    def test_codes_cfb_does_not_document_stay_honestly_unknown(self, code):
+        """PCOM (8,483 rows), TRST (14) and ORG (1) appear in the data but in
+        neither CFB's key nor the old map. Deriving from the key cannot invent a
+        label for them, and should not: an explicit Unknown is the correct answer,
+        and these are the rows a later plan has to decide how to present."""
+        assert code not in cm.CONTRIBUTOR_CODES
+        assert cm.get_contributor_type(code) == "Unknown"
 
 
 class TestAdjustmentTypes:
@@ -768,10 +807,21 @@ def values(field: str) -> dict[str, str]:
 
 
 def label(field: str, code, default: str | None = None) -> str:
-    """Look up one label. Codes are compared as strings, since CFB mixes types."""
-    if code is None:
+    """Look up one label. Codes are compared as strings, since CFB mixes types.
+
+    A blank code is not the same as a missing one. CFB writes "Blank = Not
+    Exempt", so EXEMPTCD genuinely documents the empty string as a code -- and
+    the loader stores blank as NULL, on 2,123,656 of 2,123,892 rows. Resolving
+    NULL to "Unknown" there would mislabel almost the whole table. So when a
+    field documents "", NULL and whitespace resolve to it; otherwise they fall
+    through to the default.
+    """
+    mapping = values(field)
+    if code is None or (isinstance(code, str) and not code.strip()):
+        if "" in mapping:
+            return mapping[""]
         return default if default is not None else "Unknown"
-    got = values(field).get(str(code).strip())
+    got = mapping.get(str(code).strip())
     if got is not None:
         return got
     return default if default is not None else f"Unknown ({code})"
@@ -864,7 +914,7 @@ def get_adjustment_type(code) -> str:
 - [ ] **Step 4: Run them to verify they pass**
 
 Run: `python3 -m pytest tests/test_code_mappings.py -v`
-Expected: PASS, 40 tests.
+Expected: PASS, 46 tests.
 
 Then confirm nothing downstream broke — `src/database/db_manager_v2.py` imports `get_payment_method`, `get_adjustment_type` and `is_individual_name` from this module:
 
@@ -1507,8 +1557,8 @@ Expected: the Postgres-marked tests run and pass. If they all SKIP, the Postgres
 - [ ] **Step 4: Confirm the full suite is green**
 
 Run: `python3 -m pytest -v`
-Expected: all tests pass. The count should be about **139** with Postgres available
-(18 code_key + 40 code_mappings + 3 program_ab + 31 normalize + 3 sql_gen + 44 cross_engine).
+Expected: all tests pass. The count should be about **145** with Postgres available
+(42 code_key + 46 code_mappings + 3 program_ab + 31 normalize + 3 sql_gen + 44 cross_engine).
 Treat these counts as a sanity check, not a contract: a number materially below them means
 tests were skipped or not collected, which is precisely what `-ra` and
 `PLOPPY_REQUIRE_ENGINES=1` exist to make visible.
@@ -1666,4 +1716,15 @@ Named here so the next plan does not have to rediscover them:
 - **Does not fix the Program A/B *numbers*.** The spec records three different Program B averages under three different predicates. Choosing and publishing one predicate belongs with the rollup-semantics plan, which owns measure definitions.
 - **Does not load the codes into Postgres.** Nothing needs a SQL join on labels yet. The rollup plan adds `code_set`/`code_value` tables fed from the same artifact.
 - **Does not address `data_dictionary.md`,** which is wrong on the same points as the old dicts were. It is documentation, not code, and the pipeline plan rewrites it from `codes.json`.
+- **Does not fix the loader's falsy-zero guards.** `src/database/db_manager_v2.py:517`
+  reads `get_payment_method(pay_method) if pay_method else None`, and `pay_method = 0`
+  is falsy, so **135,005 rows** are stored as NULL rather than "Unknown". Line 521 has
+  the same shape for `adjtypecd = 0`, and line 331 for a blank `boroughcd`. Correcting
+  the labels does not help a caller that never asks. This belongs with the ETL pipeline
+  plan, which owns the loader; recorded here with the measured count so it is not
+  rediscovered. Note the fix is `is not None`, not a truthiness test.
+- **Does not re-load `exemptcd`.** The column is NULL on 2,123,656 of 2,123,892 rows and
+  `''` on none, so CFB's documented blank code was flattened to NULL at load time. This
+  plan's accessor resolves NULL to the documented code, which is the right read-side
+  behaviour; whether to store `''` instead is the pipeline plan's call.
 - **Does not add `daitch_mokotoff`.** It needs `fuzzystrmatch` 1.2, i.e. PG16+, and the laptop is PG14.13. The local upgrade is a prerequisite for the identity plan, not this one.
