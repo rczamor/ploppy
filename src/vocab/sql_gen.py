@@ -29,7 +29,11 @@ def _pg_literal(text: str) -> str:
         if ch.isascii() and ch.isprintable() and ch != "'":
             parts.append(ch)
         else:
-            parts.append(f"\\{ord(ch):04X}")
+            # U&'' takes \XXXX for the BMP and \+XXXXXX beyond it. Writing a
+            # supplementary-plane codepoint as \1D165 is read as U+1D16 followed
+            # by the literal digit 5, which silently adds 0-9 and A-F to the
+            # delete list and eats those characters from every name.
+            parts.append(f"\\{ord(ch):04X}" if ord(ch) <= 0xFFFF else f"\\+{ord(ch):06X}")
     return "U&'" + "".join(parts) + "'"
 
 

@@ -65,12 +65,16 @@ def test_delete_chars_and_the_translate_table_agree():
     two sets directly catches the next one without needing a vector for it."""
     import unicodedata
 
-    from src.vocab.normalize import DELETE_CHARS, translate_pairs
+    from src.vocab.normalize import DELETE_CHARS, fold_ascii, translate_pairs
 
     src, dst = translate_pairs()
     deleted_by_table = set(src[len(dst):])
+    # Python's real behaviour is "fold_ascii erases it". The earlier predicate
+    # (DELETE_CHARS plus combining class > 0) was an approximation that missed
+    # U+0F73, U+0F75 and U+0F81: class 0 themselves, but they decompose under
+    # NFD into marks that are all then stripped, so Python deletes them too.
     deleted_by_python = set(DELETE_CHARS) | {
-        c for c in src if unicodedata.combining(c)
+        c for c in src if fold_ascii(c) == ""
     }
     assert deleted_by_table == deleted_by_python, (
         "python and the generated table disagree about which characters vanish: "
@@ -82,21 +86,71 @@ def test_delete_chars_and_the_translate_table_agree():
 def test_every_multichar_uppercase_that_matters_is_expanded_explicitly():
     """The one step not generated from the shared table is upper(), and the
     engines disagree about it: Python does full case mapping, SQL does simple.
-    So every character whose uppercase is multi-character AND lands in [A-Z]
-    must be expanded explicitly in EXPAND_FOLDS, or Python will diverge from
-    both engines. Derived from unicodedata so a new one cannot be missed."""
-    import unicodedata
+    So every character whose uppercase is multi-character AND whose Python
+    normalization is more than one character must be expanded explicitly in
+    EXPAND_FOLDS, or Python will diverge from both engines. Derived from
+    unicodedata so a new one cannot be missed.
 
-    from src.vocab.normalize import EXPAND_FOLDS
+    An earlier version required the uppercase to be pure ASCII (isascii()),
+    which hid U+0149 and U+1E9A: their uppercase is PARTLY ASCII (U+02BC + N,
+    A + U+02BE), so they were skipped yet still diverged."""
+    from src.vocab.normalize import EXPAND_FOLDS, name_norm
 
+    # Probe inside a word so an expansion that yields a space is still visible:
+    # a character that merely folds, or becomes a space, or is deleted, gives
+    # "AxB" of length <= 3; only a real expansion makes it longer.
     needs_expanding = {
         chr(cp)
-        for cp in range(0x20, 0x20000)
-        if len(chr(cp).upper()) > 1
-        and chr(cp).upper().isascii()
-        and chr(cp).upper().isalpha()
+        for cp in range(0x20, 0x110000)
+        if not 0xD800 <= cp <= 0xDFFF
+        and len(name_norm("A" + chr(cp) + "B")) > 3
     }
     assert needs_expanding == set(EXPAND_FOLDS), (
         f"missing={sorted(needs_expanding - set(EXPAND_FOLDS))!r} "
         f"extra={sorted(set(EXPAND_FOLDS) - needs_expanding)!r}"
     )
+
+
+def test_the_table_reproduces_python_across_the_whole_plane():
+    """The golden vectors are the author's own choices, and a sweep found 820
+    codepoints they missed. This asserts the actual claim -- that the generated
+    table reproduces Python -- over every codepoint rather than a sample.
+
+    Simulated in Python against the generated table rather than run through the
+    engines, so it costs a second or two instead of minutes; test_cross_engine
+    covers the engines themselves on the vectors.
+    """
+    import re
+
+    from src.vocab.normalize import EXPAND_FOLDS, name_norm, translate_pairs
+
+    src, dst = translate_pairs()
+    mapping = {ord(a): b for a, b in zip(src, dst)}
+    mapping.update({ord(c): None for c in src[len(dst):]})
+
+    def as_sql_would(text: str) -> str | None:
+        for a, b in EXPAND_FOLDS.items():
+            text = text.replace(a, b)
+        return re.sub(r"[^A-Z0-9]+", " ", text.translate(mapping).upper()).strip() or None
+
+    divergences = [
+        hex(cp)
+        for cp in range(0x20, 0x110000)
+        if not 0xD800 <= cp <= 0xDFFF
+        and name_norm("A" + chr(cp) + "B") != as_sql_would("A" + chr(cp) + "B")
+    ]
+    assert not divergences, f"{len(divergences)} codepoints diverge: {divergences[:20]}"
+
+
+def test_the_structural_rule_is_not_duplicated_by_hand():
+    """Only the tables are generated; the regex and the trim/nullif wrapper are
+    templates. Mutating _NON_ALNUM in Python left the whole suite green while
+    Python and SQL disagreed, so assert the SQL carries the same class."""
+    from src.vocab.normalize import _NON_ALNUM
+    from src.vocab.sql_gen import duckdb_sql, postgres_sql
+
+    for sql in (postgres_sql(), duckdb_sql()):
+        assert _NON_ALNUM.pattern in sql, (
+            f"generated SQL does not carry {_NON_ALNUM.pattern!r}; the Python rule and the "
+            "SQL template have drifted"
+        )

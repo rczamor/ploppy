@@ -57,10 +57,14 @@ DELETE_CHARS = "�­͏"
 #: Expanding explicitly here, rather than relying on upper()'s implicit
 #: behaviour, is what lets the generated SQL reproduce it. Expanding is also the
 #: better normalization: Weiß genuinely should match Weiss.
-#: Enumerated from unicodedata over U+0020..U+1FFFF: of the 102 characters with
-#: a multi-character uppercase, these 8 are the only ones expanding to ASCII
-#: letters. The rest expand to non-ASCII and become spaces in all three engines
-#: alike, so they need no entry.
+#: Enumerated from unicodedata over U+0020..U+1FFFF. The selection rule is not
+#: "uppercases to pure ASCII" -- that missed U+0149 and U+1E9A, whose uppercase
+#: is PARTLY ASCII -- but "Python's own normalization of it is more than one
+#: character". The values for U+0149 and U+1E9A reproduce exactly what Python
+#: already does with them: the non-ASCII half becomes a space. Characters whose
+#: uppercase is multi-character but whose normalization is not (they expand to
+#: Greek, Armenian and the like) become spaces in all three engines alike and
+#: need no entry.
 EXPAND_FOLDS = {
     "ß": "ss",
     "ﬀ": "ff",
@@ -70,6 +74,8 @@ EXPAND_FOLDS = {
     "ﬄ": "ffl",
     "ﬅ": "st",
     "ﬆ": "st",
+    "ŉ": " n",   # U+0149: upper() is U+02BC + N, so the apostrophe becomes a space
+    "ẚ": "a ",   # U+1E9A: upper() is A + U+02BE, likewise
 }
 
 #: Single-character folds NFD cannot express. A stroke or bar is part of the
@@ -111,41 +117,40 @@ def name_norm(text: str | None) -> str | None:
     return collapsed or None
 
 
-def translate_pairs(max_codepoint: int = 0x1EFF) -> tuple[str, str]:
-    """Build the (from, to) argument pair for Postgres translate().
+def translate_pairs() -> tuple[str, str]:
+    """Build the (from, to) argument pair for translate(), derived from Python.
 
-    Postgres has no NFD-strip primitive usable in an IMMUTABLE expression, so the
-    fold is expressed as an explicit character list. Enumerating it from
-    unicodedata here -- rather than typing it -- is what keeps the Postgres
-    function, the DuckDB macro and this module from drifting apart.
+    The rule is not a codepoint range -- an earlier version walked
+    U+00C0..U+01EFF and deleted only U+0300..U+036F, and a full-plane sweep
+    found 820 codepoints where Python and the two SQL engines disagreed. The
+    rule is: every codepoint whose Python normalization is a single ASCII
+    character must be folded to it, and every codepoint Python's fold erases
+    must be deleted. Derived here rather than enumerated, so the table cannot
+    fall behind the definition it is supposed to mirror.
 
-    Covers Latin-1 Supplement through Latin Extended-B by default, which is every
-    accented form observed in either jurisdiction's data. Characters that fold to
-    more than one ASCII character (such as U+00C6 AE) cannot be expressed by
-    translate() and are reported by sql_gen so they can be handled explicitly.
+    ASCII a-z are folded here too, which is what makes the generated SQL
+    locale-independent. SQL upper() is not: this cluster is lc_ctype=C, where
+    upper('stra\u00dfe') leaves the eszett alone, and under a glibc tr_TR cluster
+    upper('i') is 'I' with a dot above -- non-ASCII, so it would become a
+    space. translate() runs before upper(), so folding a-z first leaves upper()
+    nothing locale-specific to do, and the IMMUTABLE declaration becomes
+    honest rather than merely asserted.
     """
-    src: list[str] = []
-    dst: list[str] = []
-    for cp in range(0xC0, max_codepoint + 1):
-        ch = chr(cp)
-        folded = fold_ascii(ch)
-        if len(folded) != 1 or folded == ch or not folded.isascii():
+    folds: dict[str, str] = {c: c.upper() for c in "abcdefghijklmnopqrstuvwxyz"}
+    deletes: list[str] = []
+    for cp in range(0xA0, 0x110000):
+        if 0xD800 <= cp <= 0xDFFF:          # surrogates are not characters
             continue
-        src.append(ch)
-        dst.append(folded)
-    for ch in DELETE_CHARS:
-        src.append(ch)  # no counterpart in dst: translate() deletes it
-    # Combining marks must go too, or decomposed input diverges from DuckDB.
-    # Python strips them via NFD, but translate() over precomposed characters
-    # alone leaves them, and the [^A-Z0-9] step then
-    # turns each one into a SPACE -- splitting the word. Measured:
-    #   NFD "JOSE MUNOZ"     -> duckdb 'JOSE MUNOZ'     pg 'JOSE MUN OZ'
-    #   NFD "Nguyen Thi Hoa" -> duckdb 'NGUYEN THI HOA' pg 'NGUYE N THI HOA'
-    # Appending the range fixes both exactly. Precomposed input agreed already,
-    # which is why a vector set that is entirely NFC would never catch this.
-    for cp in range(0x0300, 0x0370):
-        src.append(chr(cp))
-    return "".join(src), "".join(dst)
+        ch = chr(cp)
+        if fold_ascii(ch) == "":
+            deletes.append(ch)
+            continue
+        norm = name_norm(ch)
+        if norm is not None and len(norm) == 1 and norm.isascii() and norm.isalnum():
+            folds[ch] = norm
+    src = "".join(folds) + "".join(deletes)
+    dst = "".join(folds.values())
+    return src, dst
 
 
 # The contract. Every implementation must produce exactly these outputs.
