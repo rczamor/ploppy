@@ -814,7 +814,9 @@ class TestUnknownCodesDegradeGracefully:
 
 class TestUnrelatedHelpersSurvived:
     def test_parse_election_cycle(self):
-        assert cm.parse_election_cycle("2021") == (2021, "")
+        # parse_election_cycle is untouched by this plan and returns "General"
+        # for a bare year, not "". Pinning what it does, not what I assumed.
+        assert cm.parse_election_cycle("2021") == (2021, "General")
 
     def test_is_individual_name(self):
         assert cm.is_individual_name("SMITH, JOHN") is True
