@@ -38,8 +38,15 @@ __all__ = [
     "translate_pairs",
 ]
 
-# Characters deleted outright, before any folding.
-DELETE_CHARS = "�­"
+# Characters deleted outright, before any folding. All three are invisible or
+# information-free: U+FFFD is a decoding casualty, U+00AD a soft hyphen, and
+# U+034F a grapheme joiner. U+034F is here rather than left to the NFD step
+# because it has combining CLASS 0 despite category Mn, so the
+# `unicodedata.combining(c)` filter below does not remove it -- while the
+# generated translate() table, which deletes all of U+0300..U+036F, does.
+# That mismatch made 'A'+U+034F+'B' normalize to 'A B' in Python and 'AB' in
+# SQL: a word split in half in one engine only.
+DELETE_CHARS = "�­͏"
 
 #: Single-character folds NFD cannot express. A stroke or bar is part of the
 #: letter, not a combining mark, so NFD leaves these intact and the
@@ -136,6 +143,7 @@ GOLDEN_VECTORS: list[tuple[str | None, str | None]] = [
     ("Trepinski�S", "TREPINSKIS"),            # U+FFFD deleted
     ("JOSE MU�OZ", "JOSE MUOZ"),              # the similarity case
     ("SMITH­JONES", "SMITHJONES"),            # soft hyphen deleted
+    ("A\u034fB", "AB"),                         # U+034F: combining class 0, so NFD alone misses it
     ("1199 SEIU", "1199 SEIU"),                    # digits survive
     ("FRIENDS OF JANE DOE 2025", "FRIENDS OF JANE DOE 2025"),
     ("...", None),                                 # punctuation only
