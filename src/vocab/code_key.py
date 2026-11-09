@@ -13,49 +13,83 @@ import json
 import re
 from pathlib import Path
 
-__all__ = ["parse_enumeration", "parse_key_csv", "build_codes", "main"]
+__all__ = [
+    "CodeKeyError",
+    "KNOWN_REPAIRS",
+    "parse_enumeration",
+    "parse_key_csv",
+    "build_codes",
+    "main",
+]
 
 # A bracketed enumeration at the end of a description: "... : [a=b; c=d]"
 _BRACKETED = re.compile(r"\[(?P<body>[^\[\]]*)\]\s*$")
 
-# One code=label pair. The lookahead stops the lazy label at the next "code=",
-# which is what recovers CFB's missing semicolon in ADJTYPECD. It requires
-# whitespace before the next code, so a parenthetical like "(EC2021 Only)"
-# stays part of the label.
-_PAIR = re.compile(r"([A-Za-z0-9]+)\s*=\s*(.*?)(?=\s+[A-Za-z0-9]+\s*=|$)")
+class CodeKeyError(ValueError):
+    """The published key did not parse as expected. Never silently absorbed."""
 
 
-def parse_enumeration(text: str) -> dict[str, str]:
+#: CFB publishes exactly one malformed enumeration. The repair is named here as
+#: data rather than inferred by a general heuristic, because a lookahead that
+#: treats " word=" as the start of a new code cannot distinguish this defect
+#: from a legitimate label containing "=" -- "B=Bar (see note: x=y)" would
+#: silently fabricate a code "x". Naming it means an upstream change raises
+#: instead of being quietly absorbed: if CFB ever adds the missing semicolon,
+#: test_known_repair_is_still_needed fails, which is the signal to delete this.
+KNOWN_REPAIRS: dict[str, tuple[str, str]] = {
+    "ADJTYPECD": ("1=Returned Check 2=Refund", "1=Returned Check; 2=Refund"),
+}
+
+
+def parse_enumeration(body: str, field: str | None = None) -> dict[str, str]:
     """Extract a code->label mapping from an enumeration body.
 
     Handles the three forms CFB actually publishes:
-      "0=Unknown; 1=Cash"                     -> {"0": "Unknown", "1": "Cash"}
-      "1=Returned Check 2=Refund"             -> both pairs, despite no separator
-      "Participant, Non-Participant"          -> label-as-code, no equals signs
-    "Blank" as a code means the empty string.
+      "0=Unknown; 1=Cash"                -> {"0": "Unknown", "1": "Cash"}
+      "Participant, Non-Participant"     -> label-as-code, no equals signs
+      "Blank = Not Exempt"               -> "Blank" means the empty-string code
+
+    The first "=" in a segment is the separator, so a label may contain "=".
+    Anything that does not fit these forms raises CodeKeyError rather than
+    returning a plausible-looking dict.
     """
-    text = (text or "").strip()
-    if not text:
+    body = (body or "").strip()
+    if not body:
         return {}
 
+    repair = KNOWN_REPAIRS.get((field or "").upper())
+    if repair and repair[0] in body:
+        body = body.replace(*repair)
+
+    segments = [s.strip() for s in body.split(";") if s.strip()]
+    if not segments:
+        return {}
+
+    # Format 3: a comma-separated label list with no "=" anywhere.
+    if not any("=" in s for s in segments):
+        return {p.strip(): p.strip() for s in segments for p in s.split(",") if p.strip()}
+    if not all("=" in s for s in segments):
+        raise CodeKeyError(f"{field or '?'}: mixed coded and uncoded segments: {segments!r}")
+
     out: dict[str, str] = {}
-    for chunk in text.split(";"):
-        for code, label in _PAIR.findall(chunk.strip()):
-            label = label.strip().rstrip(",;").strip()
-            if not label:
-                continue
-            key = "" if code.lower() == "blank" else code
-            out[key] = label
-
-    if out:
-        return out
-
-    # No "code=" anywhere: the labels themselves are the values.
-    return {
-        part.strip(): part.strip()
-        for part in text.split(",")
-        if part.strip()
-    }
+    for seg in segments:
+        code, label = seg.split("=", 1)
+        code, label = code.strip(), label.strip().rstrip(",;").strip()
+        if code.upper() == "BLANK":
+            code = ""
+        if not label:
+            raise CodeKeyError(f"{field or '?'}: code {code!r} has an empty label")
+        if "=" in label:
+            raise CodeKeyError(
+                f"{field or '?'}: label for {code!r} contains '=' ({label!r}); this is what "
+                "CFB's missing-separator defect looks like -- add a KNOWN_REPAIRS entry"
+            )
+        if code and re.search(r"\s", code):
+            raise CodeKeyError(f"{field or '?'}: code {code!r} contains whitespace")
+        if code in out:
+            raise CodeKeyError(f"{field or '?'}: duplicate code {code!r}")
+        out[code] = label
+    return out
 
 
 def parse_key_csv(path: str | Path) -> dict[str, dict]:
@@ -83,33 +117,36 @@ def parse_key_csv(path: str | Path) -> dict[str, dict]:
         col, type_, name, description = (c.strip() for c in row[:4])
         if not col.isdigit() or not name:
             continue
-        body = ""
         match = _BRACKETED.search(description)
         if match:
-            body = match.group("body")
+            values = parse_enumeration(match.group("body"), name)
+        elif "[" in description:
+            raise CodeKeyError(
+                f"{name}: description contains '[' but no parsable [...] list: {description!r}"
+            )
+        else:
+            values = {}
         key[name] = {
             "column": int(col),
             "type": type_,
             "description": description,
-            "values": parse_enumeration(body),
+            "values": values,
         }
     return key
 
 
 def build_codes(path: str | Path) -> dict:
-    """Build the codes.json payload: only the fields that carry enumerations."""
-    key = parse_key_csv(path)
+    """Build the codes.json payload: every field CFB documents, enumerated or not.
+
+    All 52 fields are kept, with an empty ``values`` for the 43 that carry no
+    enumeration. That is deliberate: codes.json is a diffable artifact, so
+    keeping the free-text fields means a future re-download reveals when CFB
+    *adds* an enumeration to a field that previously had none. Filtering would
+    hide exactly the change worth noticing.
+    """
     return {
         "source": "https://www.nyccfb.info/DataLibrary/Key-Contribution.csv",
-        "fields": {
-            name: {
-                "column": meta["column"],
-                "type": meta["type"],
-                "description": meta["description"],
-                "values": meta["values"],
-            }
-            for name, meta in key.items()
-        },
+        "fields": parse_key_csv(path),
     }
 
 
