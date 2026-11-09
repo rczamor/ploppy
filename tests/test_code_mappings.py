@@ -161,3 +161,107 @@ class TestUnrelatedHelpersSurvived:
     def test_is_individual_name(self):
         assert cm.is_individual_name("SMITH, JOHN") is True
         assert cm.is_individual_name("ACME HOLDINGS LLC") is False
+
+
+class TestCodeCoercion:
+    def test_float_codes_still_resolve(self):
+        """pandas promotes an integer column to float when any value is NULL, so
+        pay_method 1 arrives as 1.0. The old int-keyed dict resolved it because
+        hash(1.0) == hash(1); str(code) does not."""
+        assert cm.get_payment_method(1.0) == "Cash"
+        assert cm.get_adjustment_type(2.0) == "Refund"
+        assert cm.get_payment_method("1") == "Cash"
+        assert cm.get_payment_method(1) == "Cash"
+
+    def test_nan_is_missing_not_a_code(self):
+        from src.vocab import codes as _c
+        assert _c.label("EXEMPTCD", float("nan")) == "Not Exempt"
+        assert _c.label("SCHEDULE", float("nan")) == "Unknown"
+
+    def test_pd_na_is_missing_not_a_code(self):
+        import pandas as pd
+        from src.vocab import codes as _c
+        assert _c.label("EXEMPTCD", pd.NA) == "Not Exempt"
+
+    def test_non_integral_float_is_not_truncated(self):
+        assert cm.get_payment_method(1.5) == "Unknown (1.5)"
+
+    def test_numeric_dicts_keep_int_keys(self):
+        """A regression to string keys would pass every other test, because the
+        getters go through str()."""
+        assert all(isinstance(k, int) for k in cm.PAYMENT_METHODS)
+        assert all(isinstance(k, int) for k in cm.ADJUSTMENT_TYPES)
+
+    def test_election_types_is_unchanged(self):
+        """Pinned deliberately: parse_election_cycle persists these into
+        elections.election_type, so editing the map rewrites stored rows."""
+        assert cm.ELECTION_TYPES == {
+            "T": "Transition", "A": "Special Election", "U": "Unknown Type",
+        }
+
+    def test_load_does_not_expose_the_cache(self):
+        from src.vocab import codes as _c
+        _c.load()["fields"]["OFFICECD"]["values"]["1"] = "Hacked"
+        assert cm.get_office_name("1") == "Mayor"
+
+
+class TestIntKeyedIsStrict:
+    def test_non_numeric_code_is_loud(self, monkeypatch):
+        monkeypatch.setattr(cm._codes, "values", lambda f: {"1": "A", "IS": "B"})
+        with pytest.raises(ValueError, match="not numeric"):
+            cm._int_keyed("PAY_METHOD")
+
+    def test_unicode_digit_raises_valueerror_not_a_crash_elsewhere(self, monkeypatch):
+        monkeypatch.setattr(cm._codes, "values", lambda f: {"²": "A"})
+        with pytest.raises(ValueError, match="not numeric"):
+            cm._int_keyed("PAY_METHOD")
+
+    def test_collisions_are_loud(self, monkeypatch):
+        monkeypatch.setattr(cm._codes, "values", lambda f: {"1": "A", "01": "B"})
+        with pytest.raises(ValueError, match="collapse"):
+            cm._int_keyed("PAY_METHOD")
+
+
+class TestCanclassGuard:
+    def test_current_artifact_passes(self):
+        cm._check_canclass_bridge(cm._codes.values("CANCLASS"))
+
+    @pytest.mark.parametrize("published", [
+        ["Participant", "Non-Participant", "Limited Participant"],  # removed
+        ["Participant", "Non-Participant", "Limited Participant",
+         "Undetermined", "Brand New"],                              # added
+        ["Participant", "Non-Participant", "Limited Participant",
+         "Undetermined Class"],                                     # renamed
+    ])
+    def test_drift_stops_the_import(self, published):
+        with pytest.raises(ValueError, match="CANCLASS drift"):
+            cm._check_canclass_bridge(published)
+
+
+class TestWrapperBehaviourForMissingAbsentAndFloat:
+    """Pins what callers actually receive, through the wrappers (not label())."""
+
+    @pytest.mark.parametrize("fn,none,absent,flt", [
+        ("get_office_name", "Unknown", "Unknown (ZZZ)", "Unknown (1.5)"),
+        ("get_borough_name", "Unknown", "Unknown (ZZZ)", "Unknown (1.5)"),
+        ("get_payment_method", "Unknown", "Unknown (ZZZ)", "Unknown (1.5)"),
+        ("get_adjustment_type", "Unknown", "Unknown (ZZZ)", "Unknown (1.5)"),
+        ("get_contributor_type", "Unknown", "Unknown", "Unknown"),
+        ("get_candidate_class_desc", "Unknown", "Unknown Class (ZZZ)",
+         "Unknown Class (1.5)"),
+    ])
+    def test_wrapper(self, fn, none, absent, flt):
+        f = getattr(cm, fn)
+        assert f(None) == none
+        assert f(float("nan")) == none
+        assert f("   ") == none
+        assert f("ZZZ") == absent
+        assert f(1.5) == flt
+
+    def test_schedule_wrapper(self):
+        f = cm.get_schedule_description
+        # The default is baked in with the offending code, so a missing value
+        # shows as "(None)"; kept as-is rather than restructuring label().
+        assert f(None) == "Unknown Schedule (None)"
+        assert f("ZZZ") == "Unknown Schedule (ZZZ)"
+        assert f(1.5) == "Unknown Schedule (1.5)"

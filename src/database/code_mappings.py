@@ -19,18 +19,35 @@ OFFICE_CODES = _codes.values("OFFICECD")
 #: The one field where CFB's key and CFB's own export disagree. The key
 #: documents CANCLASS as full labels ("Participant"), but the export column
 #: contains abbreviations. Measured in cfb_contributions: P 1,962,546,
-#: NP 134,526, UN 26,800. So this field needs an explicit bridge from the codes
-#: the data uses to the labels the key publishes. Sourcing it straight from
-#: codes.json would make get_candidate_class_desc("P") return
-#: "Unknown Class (P)" for 92% of rows -- a regression, in a plan whose whole
-#: point is getting labels right. Indexing (rather than .get) is deliberate:
-#: if CFB renames a label, this raises at import instead of silently emptying.
+#: NP 134,526, UN 26,800. Sourcing it straight from codes.json would make
+#: get_candidate_class_desc("P") return "Unknown Class (P)" for 92% of rows.
+#:
+#: What is and is not derived here: the abbreviation -> label PAIRING (P ->
+#: Participant) is authored knowledge that nothing can check against CFB's key,
+#: and in the artifact every CANCLASS key equals its value, so the lookup below
+#: adds no information of its own. What the assertion guards is drift in the
+#: label SET: a renamed, added or removed CFB class stops the import instead of
+#: being silently ignored. It cannot catch a wrong pairing.
 _CANCLASS_ABBREVIATIONS = {
     "P": "Participant",
     "NP": "Non-Participant",
     "L": "Limited Participant",
     "UN": "Undetermined",
 }
+
+
+def _check_canclass_bridge(published) -> None:
+    published = set(published)
+    if set(_CANCLASS_ABBREVIATIONS.values()) != published:
+        raise ValueError(
+            "CANCLASS drift: the bridge targets "
+            f"{sorted(_CANCLASS_ABBREVIATIONS.values())} but CFB's key publishes "
+            f"{sorted(published)}. Reconcile src/database/code_mappings.py "
+            "with src/vocab/codes.json before continuing."
+        )
+
+
+_check_canclass_bridge(_codes.values("CANCLASS"))
 CANDIDATE_CLASS = {
     abbrev: _codes.values("CANCLASS")[label]
     for abbrev, label in _CANCLASS_ABBREVIATIONS.items()
@@ -41,14 +58,32 @@ SCHEDULE_TYPES = _codes.values("SCHEDULE")
 PURPOSE_CODES = _codes.values("PURPOSECD")
 EXEMPT_CODES = _codes.values("EXEMPTCD")
 
-# PAY_METHOD and ADJTYPECD are integers in the contributions export, so key the
-# dicts by int while the artifact keys by string.
-PAYMENT_METHODS = {
-    int(k): v for k, v in _codes.values("PAY_METHOD").items() if k.isdigit()
-}
-ADJUSTMENT_TYPES = {
-    int(k): v for k, v in _codes.values("ADJTYPECD").items() if k.isdigit()
-}
+def _int_keyed(field: str) -> dict[int, str]:
+    """Re-key a numeric field to ints, preserving the pre-existing dict shape.
+
+    Strict on purpose. Filtering non-numeric codes would drop one silently, and
+    str.isdigit() is not int()-safe -- '\u00b2'.isdigit() is True while
+    int('\u00b2') raises. A new non-numeric code in a numeric field is a real
+    upstream event and should stop the build, not vanish.
+    """
+    out: dict[int, str] = {}
+    for code, label_text in _codes.values(field).items():
+        try:
+            key = int(code)
+        except ValueError as exc:
+            raise ValueError(
+                f"{field}: code {code!r} is not numeric, but this field is re-keyed "
+                f"to ints to preserve the pre-existing API shape"
+            ) from exc
+        if key in out:
+            raise ValueError(f"{field}: codes {code!r} and another collapse to {key}")
+        out[key] = label_text
+    return out
+
+
+# PAY_METHOD and ADJTYPECD are integers in the contributions export.
+PAYMENT_METHODS = _int_keyed("PAY_METHOD")
+ADJUSTMENT_TYPES = _int_keyed("ADJTYPECD")
 
 # Not in CFB's key: these are election-token suffixes, not a published
 # enumeration, so this stays a literal. parse_election_cycle stores its result in
@@ -69,9 +104,10 @@ def get_office_name(code: str) -> str:
 
 def get_candidate_class_desc(code: str) -> str:
     """Resolve the export's abbreviation (P/NP/L/UN), not the key's label."""
-    if code is None:
+    key = _codes._code_key(code)
+    if key is None:
         return "Unknown"
-    return CANDIDATE_CLASS.get(str(code).strip(), f"Unknown Class ({code})")
+    return CANDIDATE_CLASS.get(key, f"Unknown Class ({code})")
 
 
 def get_contributor_type(code: str) -> str:
