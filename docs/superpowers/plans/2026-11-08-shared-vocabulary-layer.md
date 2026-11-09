@@ -1715,8 +1715,8 @@ Expected: the Postgres-marked tests run and pass. If they all SKIP, the Postgres
 - [ ] **Step 4: Confirm the full suite is green**
 
 Run: `python3 -m pytest -v`
-Expected: all tests pass. The count should be about **206** with Postgres available
-(44 code_key + 74 code_mappings + 3 program_ab + 34 normalize + 4 sql_gen + 50 cross_engine).
+Expected: all tests pass. The count should be about **217** with Postgres available
+(44 code_key + 74 code_mappings + 3 program_ab + 39 normalize + 5 sql_gen + 52 cross_engine).
 Treat these counts as a sanity check, not a contract: a number materially below them means
 tests were skipped or not collected, which is precisely what `-ra` and
 `PLOPPY_REQUIRE_ENGINES=1` exist to make visible.
@@ -1983,7 +1983,10 @@ should match `Weiss`.
 - [ ] `get_schedule_description("M")` returns "Receipt Adjustments".
 - [ ] `1253 not in PAYMENT_METHODS`.
 - [ ] `python3 -c "import src.database.db_manager_v2"` exits 0.
-- [ ] CI is green on the branch.
+- [ ] CI is green on the branch. **Not yet checkable: nothing has been pushed.** Every other
+  item above is verified. Note the suite now takes ~9.5s rather than ~1s, almost all of it
+  the whole-plane sweep, which is the one test that would have caught the 820-codepoint
+  divergence and both literal bugs. That is a trade worth making.
 
 ## What this plan does not do
 
