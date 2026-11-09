@@ -12,7 +12,7 @@
 
 **Scope:** This is plan 1 of several. It implements build-order steps 1 and 2 from `docs/superpowers/specs/2026-11-08-ploppy-research-tool-design.md` (committed `fbada2a`). It needs no Vercel project, no Neon database and no Blob store — everything runs on the laptop. Later plans cover: the identity schema, the ETL pipeline, rollup semantics, the Parquet build and publish, the public surface, the private console, and district attribution.
 
-**Why this first:** `src/database/code_mappings.py` currently mislabels office codes 11/44/55 as "Special Designation / District / Office" when CFB's key says they are the 2021 Program A offices. That single defect hides the only natural experiment in the dataset. It also labels Schedule M as "Matchable Contributions" when M is Receipt Adjustments — refunds carrying negative amounts — so every aggregate built on it counts refunds as contributions. And the two engines currently have no shared normalization at all, which is a zero-rows-not-an-error failure waiting to happen on every fact-to-dimension join.
+**Why this first — measured against the `ploppy` database, not asserted.** `src/database/code_mappings.py` mislabels office codes 11/44/55 as "Special Designation / District / Office" when CFB's key says they are the 2021 Program A offices. Under `election LIKE '2021%'` the six Program A codes (11/22/33/44/55/66) carry **437,059 rows and $49,779,237** — 92.5% of that cycle's contribution rows and 71.2% of its dollars — so three fabricated labels sit on top of nearly the whole cycle, hiding the only natural experiment in the dataset. Schedule M is Receipt Adjustments, not "Matchable Contributions": **39,336 of its 39,361 rows are negative**, summing to **-$24,468,945.56**, so anything aggregating M as contributions nets refunds into totals. Schedules `G` (54 rows) and `N` (771 rows) are in CFB's key *and* the data but absent from the module, and `X` (1,504 rows) is in neither — those get `Unknown Schedule (...)` today. And the two engines have no shared normalization at all, which is a zero-rows-not-an-error failure waiting to happen on every fact-to-dimension join.
 
 ---
 
@@ -249,7 +249,12 @@ without a diff is a silent change in meaning. Re-download it, re-run
   `[Participant, Non-Participant, Limited Participant, Undetermined]`.
 - `EXEMPTCD` writes `Blank = Not Exempt`, with spaces around the equals sign, to
   mean the empty string.
-- Row 0's first cell contains an embedded newline. The file is UTF-8 with a BOM.
+- Row 0's first cell contains an embedded newline. The file is UTF-8 with **no**
+  BOM — decoding with `utf-8-sig` is harmless but nothing is stripped, so no test
+  should assert a BOM is removed. Line endings are mixed: 57 CRLF and 4 bare LF,
+  so the file must be read with the `csv` module and `newline=''`, never with
+  `splitlines()`. (An earlier draft of this plan claimed a BOM; verified absent —
+  the first three bytes are `22 4e 59`.)
 - Schedule `X` appears in the data (1,504 rows) but **not** in this key.
 ```
 
@@ -649,6 +654,19 @@ class TestScheduleTypesWereMislabelled:
     def test_abc_is_monetary_contributions(self):
         assert cm.get_schedule_description("ABC") == "Monetary Contributions"
 
+    @pytest.mark.parametrize("code", ["G", "N"])
+    def test_schedules_present_in_the_data_but_missing_from_the_old_map(self, code):
+        """G (54 rows) and N (771 rows) are in CFB's key and in the data, but the
+        hand-typed map omitted them, so they resolved to Unknown. Deriving from the
+        key fixes these for free -- this test only pins that it stayed fixed."""
+        label = cm.get_schedule_description(code)
+        assert label and not label.startswith("Unknown")
+
+    def test_schedule_x_is_honestly_unknown(self):
+        """X has 1,504 rows in the data and appears nowhere in CFB's key. An honest
+        Unknown is the correct answer; inventing a label would be worse than none."""
+        assert cm.get_schedule_description("X") == "Unknown Schedule (X)"
+
 
 class TestPaymentMethodsWereWrongAndPartlyInvented:
     def test_real_codes(self):
@@ -846,7 +864,7 @@ def get_adjustment_type(code) -> str:
 - [ ] **Step 4: Run them to verify they pass**
 
 Run: `python3 -m pytest tests/test_code_mappings.py -v`
-Expected: PASS, 36 tests.
+Expected: PASS, 40 tests.
 
 Then confirm nothing downstream broke — `src/database/db_manager_v2.py` imports `get_payment_method`, `get_adjustment_type` and `is_individual_name` from this module:
 
@@ -865,8 +883,10 @@ the dataset. Schedule M is Receipt Adjustments (refunds, negative AMNT), not
 matchable contributions, so every aggregate built on the old map counted
 \$24.47M of refunds as contributions. Schedule D is In-Kind, not expenditures.
 PAY_METHOD 3/4/5 were Credit Card/Electronic Transfer/Other and are actually
-Other/Credit Card/Money Order, and five codes (1253/1530/7686/8012/9253) were
-invented outright. PCOMP is a Political Action Committee and PCOMC a Candidate
+Other/Credit Card/Money Order. Ten declared codes (11-15 and
+1253/1530/7686/8012/9253) appear in none of the 2,123,865 rows despite a comment
+claiming they were 'found in actual data', while three codes that do appear were
+undeclared -- code 0 alone covers 135,005 rows. PCOMP is a Political Action Committee and PCOMC a Candidate
 Committee; CAN, FAM, SPO and PCOMZ were missing entirely."
 ```
 
@@ -1487,8 +1507,11 @@ Expected: the Postgres-marked tests run and pass. If they all SKIP, the Postgres
 - [ ] **Step 4: Confirm the full suite is green**
 
 Run: `python3 -m pytest -v`
-Expected: all tests pass. The count should be about **135** with Postgres available
-(18 code_key + 36 code_mappings + 3 program_ab + 31 normalize + 3 sql_gen + 44 cross_engine).
+Expected: all tests pass. The count should be about **139** with Postgres available
+(18 code_key + 40 code_mappings + 3 program_ab + 31 normalize + 3 sql_gen + 44 cross_engine).
+Treat these counts as a sanity check, not a contract: a number materially below them means
+tests were skipped or not collected, which is precisely what `-ra` and
+`PLOPPY_REQUIRE_ENGINES=1` exist to make visible.
 A materially lower number means tests are being skipped or a module failed to collect — read
 the summary line rather than trusting the green.
 
