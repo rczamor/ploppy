@@ -644,7 +644,7 @@ git commit -m "feat: generate codes.json from CFB's key as a committed artifact"
 
 `src/database/code_mappings.py` is 220 lines, of which lines 7–93 are hand-typed dicts. Those get replaced by lookups into `codes.json`. Everything below them — `parse_election_cycle`, `parse_name`, `is_individual_name` — is unrelated string handling and stays untouched.
 
-The public API that must not change: `OFFICE_CODES`, `CANDIDATE_CLASS`, `CONTRIBUTOR_CODES`, `BOROUGH_CODES`, `PAYMENT_METHODS`, `SCHEDULE_TYPES`, `ADJUSTMENT_TYPES`, `ELECTION_TYPES`, `get_office_name`, `get_candidate_class_desc`, `get_contributor_type`, `get_borough_name`, `get_payment_method`, `get_schedule_description`, `get_adjustment_type`, `parse_election_cycle`, `parse_name`, `is_individual_name`.
+The public API that must not change: `OFFICE_CODES`, `CANDIDATE_CLASS`, `CONTRIBUTOR_CODES`, `BOROUGH_CODES`, `PAYMENT_METHODS`, `SCHEDULE_TYPES`, `ADJUSTMENT_TYPES`, `ELECTION_TYPES`, `PURPOSE_CODES`, `EXEMPT_CODES`, `get_office_name`, `get_candidate_class_desc`, `get_contributor_type`, `get_borough_name`, `get_payment_method`, `get_schedule_description`, `get_adjustment_type`, `parse_election_cycle`, `parse_name`, `is_individual_name`.
 
 **Files:**
 - Create: `src/vocab/codes.py`
@@ -1486,6 +1486,18 @@ _HEADER = (
 )
 
 
+def _duckdb_literal(text: str) -> str:
+    """A DuckDB string literal carrying the real codepoints.
+
+    DuckDB has no `U&'...'` literal -- it parses the leading `U` as a column
+    name and raises BinderException -- and no `\\uXXXX` escape in a plain
+    string either. So the characters are embedded directly in the UTF-8 file,
+    with `'` doubled. This is the same rule as the delete class: always embed
+    the real codepoint, never an escape that looks like one.
+    """
+    return "'" + text.replace("'", "''") + "'"
+
+
 def _pg_literal(text: str) -> str:
     """A Postgres string literal, with non-ASCII written as U&'...' escapes so the
     file stays ASCII and cannot be corrupted by an editor or a locale."""
@@ -1581,12 +1593,7 @@ python3 -m src.vocab.sql_gen --write
 python3 -m pytest tests/test_sql_gen.py -v
 ```
 
-Expected: two `wrote ...` lines, then PASS, 3 tests.
-
-Inspect the DuckDB regex class, because `\xFFFD` is the one form DuckDB's regex engine accepts — `�` is rejected with `invalid escape sequence: \u`:
-
-```bash
-head -8 src/vocab/generated/name_norm_duckdb.sql
+Expected: two `wrote ...` lines, then PASS, 3 tests.sql
 ```
 
 - [ ] **Step 5: Commit**
@@ -1867,6 +1874,15 @@ Named here so the next plan does not have to rediscover them:
 - **Does not fix the Program A/B *numbers*.** The spec records three different Program B averages under three different predicates. Choosing and publishing one predicate belongs with the rollup-semantics plan, which owns measure definitions.
 - **Does not load the codes into Postgres.** Nothing needs a SQL join on labels yet. The rollup plan adds `code_set`/`code_value` tables fed from the same artifact.
 - **Does not address `data_dictionary.md`,** which is wrong on the same points as the old dicts were. It is documentation, not code, and the pipeline plan rewrites it from `codes.json`.
+- **Does not fix `is_individual_name`.** It classifies a name as an organization if the
+  name *contains* any of `INC`, `PAC`, `CO.`, `GROUP` and similar as a plain substring, so
+  every person named **Vincent** (`V-INC-ent`), **Princess** (`Pr-INC-ess`) or **DePace**
+  (`De-PAC-e`) is called an organization. Measured against the contributors table:
+  **4,690 of 885,629** names that CFB itself codes `c_code='IND'` are misclassified, or
+  0.53%. Left untouched because this plan froze those three functions byte-identical and
+  because changing the classification changes behaviour the app already depends on. The
+  real fix is word-boundary matching plus trusting `c_code` first, and it belongs with the
+  identity plan, which owns entity classification.
 - **Does not fix the loader's falsy-zero guards.** `src/database/db_manager_v2.py:517`
   reads `get_payment_method(pay_method) if pay_method else None`, and `pay_method = 0`
   is falsy, so **135,005 rows** are stored as NULL rather than "Unknown". Line 521 has
