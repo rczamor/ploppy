@@ -723,6 +723,24 @@ class TestPaymentMethodsWereWrongAndPartlyInvented:
         assert fabricated not in cm.PAYMENT_METHODS
 
 
+class TestCandidateClassBridgesKeyLabelsToDataCodes:
+    @pytest.mark.parametrize("code,label", [
+        ("P", "Participant"),
+        ("NP", "Non-Participant"),
+        ("UN", "Undetermined"),
+        ("L", "Limited Participant"),
+    ])
+    def test_data_abbreviations_resolve_to_the_keys_labels(self, code, label):
+        """The export column carries P/NP/UN, not the key's full labels.
+        P alone is 1,962,546 rows."""
+        assert cm.get_candidate_class_desc(code) == label
+
+    def test_the_keys_own_labels_are_not_the_keys(self):
+        """Guards the regression directly: keying by label would look fine in
+        isolation and return Unknown for every real row."""
+        assert "Participant" not in cm.CANDIDATE_CLASS
+
+
 class TestBlankIsACodeNotAMissingValue:
     def test_null_exemptcd_resolves_to_the_documented_blank_code(self):
         """CFB documents "" as a code meaning Not Exempt, and the loader stores
@@ -881,7 +899,25 @@ import pandas as pd
 from src.vocab import codes as _codes
 
 OFFICE_CODES = _codes.values("OFFICECD")
-CANDIDATE_CLASS = _codes.values("CANCLASS")
+#: The one field where CFB's key and CFB's own export disagree. The key
+#: documents CANCLASS as full labels ("Participant"), but the export column
+#: contains abbreviations. Measured in cfb_contributions: P 1,962,546,
+#: NP 134,526, UN 26,800. So this field needs an explicit bridge from the codes
+#: the data uses to the labels the key publishes. Sourcing it straight from
+#: codes.json would make get_candidate_class_desc("P") return
+#: "Unknown Class (P)" for 92% of rows -- a regression, in a plan whose whole
+#: point is getting labels right. Indexing (rather than .get) is deliberate:
+#: if CFB renames a label, this raises at import instead of silently emptying.
+_CANCLASS_ABBREVIATIONS = {
+    "P": "Participant",
+    "NP": "Non-Participant",
+    "L": "Limited Participant",
+    "UN": "Undetermined",
+}
+CANDIDATE_CLASS = {
+    abbrev: _codes.values("CANCLASS")[label]
+    for abbrev, label in _CANCLASS_ABBREVIATIONS.items()
+}
 CONTRIBUTOR_CODES = _codes.values("C_CODE")
 BOROUGH_CODES = _codes.values("BOROUGHCD")
 SCHEDULE_TYPES = _codes.values("SCHEDULE")
@@ -947,7 +983,7 @@ def get_adjustment_type(code) -> str:
 - [ ] **Step 4: Run them to verify they pass**
 
 Run: `python3 -m pytest tests/test_code_mappings.py -v`
-Expected: PASS, 46 tests.
+Expected: PASS, 51 tests.
 
 Then confirm nothing downstream broke — `src/database/db_manager_v2.py` imports `get_payment_method`, `get_adjustment_type` and `is_individual_name` from this module:
 
@@ -1590,8 +1626,8 @@ Expected: the Postgres-marked tests run and pass. If they all SKIP, the Postgres
 - [ ] **Step 4: Confirm the full suite is green**
 
 Run: `python3 -m pytest -v`
-Expected: all tests pass. The count should be about **145** with Postgres available
-(42 code_key + 46 code_mappings + 3 program_ab + 31 normalize + 3 sql_gen + 44 cross_engine).
+Expected: all tests pass. The count should be about **150** with Postgres available
+(43 code_key + 51 code_mappings + 3 program_ab + 31 normalize + 3 sql_gen + 44 cross_engine).
 Treat these counts as a sanity check, not a contract: a number materially below them means
 tests were skipped or not collected, which is precisely what `-ra` and
 `PLOPPY_REQUIRE_ENGINES=1` exist to make visible.
@@ -1756,6 +1792,11 @@ Named here so the next plan does not have to rediscover them:
   the labels does not help a caller that never asks. This belongs with the ETL pipeline
   plan, which owns the loader; recorded here with the measured count so it is not
   rediscovered. Note the fix is `is not None`, not a truthiness test.
+- **Does not clean the literal string `'None'`.** `canclass` holds the four-character
+  string `'None'` on 20 rows -- a Python `None` stringified at load time rather than a
+  NULL. Harmless at this scale and invisible to label lookup (it resolves to Unknown),
+  but it means the loader stringifies before writing, so other columns may carry the
+  same artifact. The pipeline plan owns it.
 - **Does not re-load `exemptcd`.** The column is NULL on 2,123,656 of 2,123,892 rows and
   `''` on none, so CFB's documented blank code was flattened to NULL at load time. This
   plan's accessor resolves NULL to the documented code, which is the right read-side
