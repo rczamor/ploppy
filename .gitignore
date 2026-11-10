@@ -9,3 +9,4 @@ logs/
 embeddings_cache/
 .streamlit/secrets.toml
 .env
+.pytest_cache/

@@ -1,124 +1,137 @@
-"""Code mappings for NYC Campaign Finance Board data."""
+"""Code mappings for NYC Campaign Finance Board data.
 
-import pandas as pd
+Labels come from CFB's own published key via src/vocab/codes.json, not from
+hand-typed dicts. Regenerate the artifact with:
+
+    python3 -m src.vocab.code_key --write
+
+The dicts below are kept as module-level names because existing callers import
+them directly; they are now derived, not authored.
+"""
+
 import re
 
-# Office codes mapping
-OFFICE_CODES = {
-    '1': 'Mayor',
-    '2': 'Public Advocate',
-    '3': 'Comptroller',
-    '4': 'Borough President',
-    '5': 'City Council Member',
-    '6': 'Unknown/Other',
-    '11': 'Special Designation',
-    '44': 'Special District',
-    '55': 'Special Office',
-    'IS': 'Independent Spending'
+import pandas as pd
+
+from src.vocab import codes as _codes
+
+OFFICE_CODES = _codes.values("OFFICECD")
+#: The one field where CFB's key and CFB's own export disagree. The key
+#: documents CANCLASS as full labels ("Participant"), but the export column
+#: contains abbreviations. Measured in cfb_contributions: P 1,962,546,
+#: NP 134,526, UN 26,800. Sourcing it straight from codes.json would make
+#: get_candidate_class_desc("P") return "Unknown Class (P)" for 92% of rows.
+#:
+#: What is and is not derived here: the abbreviation -> label PAIRING (P ->
+#: Participant) is authored knowledge that nothing can check against CFB's key,
+#: and in the artifact every CANCLASS key equals its value, so the lookup below
+#: adds no information of its own. What the assertion guards is drift in the
+#: label SET: a renamed, added or removed CFB class stops the import instead of
+#: being silently ignored. It cannot catch a wrong pairing.
+_CANCLASS_ABBREVIATIONS = {
+    "P": "Participant",
+    "NP": "Non-Participant",
+    "L": "Limited Participant",
+    "UN": "Undetermined",
 }
 
-# Candidate class mapping
+
+def _check_canclass_bridge(published) -> None:
+    published = set(published)
+    if set(_CANCLASS_ABBREVIATIONS.values()) != published:
+        raise ValueError(
+            "CANCLASS drift: the bridge targets "
+            f"{sorted(_CANCLASS_ABBREVIATIONS.values())} but CFB's key publishes "
+            f"{sorted(published)}. Reconcile src/database/code_mappings.py "
+            "with src/vocab/codes.json before continuing."
+        )
+
+
+_check_canclass_bridge(_codes.values("CANCLASS"))
 CANDIDATE_CLASS = {
-    'P': 'Participating',
-    'NP': 'Non-participating',
-    'UN': 'Unknown',
-    'L': 'Limited Participation',
-    'E': 'Exempt'
+    abbrev: _codes.values("CANCLASS")[label]
+    for abbrev, label in _CANCLASS_ABBREVIATIONS.items()
 }
+CONTRIBUTOR_CODES = _codes.values("C_CODE")
+BOROUGH_CODES = _codes.values("BOROUGHCD")
+SCHEDULE_TYPES = _codes.values("SCHEDULE")
+PURPOSE_CODES = _codes.values("PURPOSECD")
+EXEMPT_CODES = _codes.values("EXEMPTCD")
 
-# Contributor type codes
-CONTRIBUTOR_CODES = {
-    'IND': 'Individual',
-    'CORP': 'Corporation',
-    'LLC': 'Limited Liability Company',
-    'PART': 'Partnership',
-    'EMPO': 'Employee Organization/Union',
-    'PCOMP': 'Political Committee',
-    'PCOMC': 'Political Committee (Other)',
-    'OTHR': 'Other',
-    'UNKN': 'Unknown'
-}
+def _int_keyed(field: str) -> dict[int, str]:
+    """Re-key a numeric field to ints, preserving the pre-existing dict shape.
 
-# Borough codes
-BOROUGH_CODES = {
-    'M': 'Manhattan',
-    'K': 'Brooklyn',
-    'Q': 'Queens',
-    'X': 'Bronx',
-    'S': 'Staten Island',
-    'Z': 'Outside NYC'
-}
+    Strict on purpose. Filtering non-numeric codes would drop one silently, and
+    str.isdigit() is not int()-safe -- '\u00b2'.isdigit() is True while
+    int('\u00b2') raises. A new non-numeric code in a numeric field is a real
+    upstream event and should stop the build, not vanish.
+    """
+    out: dict[int, str] = {}
+    for code, label_text in _codes.values(field).items():
+        try:
+            key = int(code)
+        except ValueError as exc:
+            raise ValueError(
+                f"{field}: code {code!r} is not numeric, but this field is re-keyed "
+                f"to ints to preserve the pre-existing API shape"
+            ) from exc
+        if key in out:
+            raise ValueError(f"{field}: codes {code!r} and another collapse to {key}")
+        out[key] = label_text
+    return out
 
-# Payment method codes (based on actual CFB data)
-PAYMENT_METHODS = {
-    1: 'Cash',
-    2: 'Check', 
-    3: 'Credit Card',
-    4: 'Electronic Transfer',
-    5: 'Other',
-    # Extended codes found in actual data
-    11: 'Cash',
-    12: 'Check',
-    13: 'Credit Card',
-    14: 'Electronic Transfer',
-    15: 'Other',
-    1253: 'Check',
-    1530: 'Electronic Transfer',
-    7686: 'Electronic Transfer',
-    8012: 'Electronic Transfer',
-    9253: 'Check',
-    # Add more as discovered
-}
 
-# Schedule types
-SCHEDULE_TYPES = {
-    'ABC': 'Contributions',
-    'D': 'Expenditures',
-    'M': 'Matchable Contributions',
-    'ICONT': 'In-Kind Contributions'
-}
+# PAY_METHOD and ADJTYPECD are integers in the contributions export.
+PAYMENT_METHODS = _int_keyed("PAY_METHOD")
+ADJUSTMENT_TYPES = _int_keyed("ADJTYPECD")
 
-# Adjustment type codes
-ADJUSTMENT_TYPES = {
-    1: 'Addition',
-    2: 'Deletion',
-    3: 'Modification'
-}
-
-# Election type suffixes
+# Not in CFB's key: these are election-token suffixes, not a published
+# enumeration, so this stays a literal. parse_election_cycle stores its result in
+# elections.election_type, so the values are left exactly as they were.
+# NEVER cast an election token to an integer: '2025T' alone is 38,496 rows and
+# $4.42M, so globbing or casting moves a 2025 headline by 15%.
 ELECTION_TYPES = {
     'T': 'Transition',
     'A': 'Special Election',
     'U': 'Unknown Type'
 }
 
+
 def get_office_name(code: str) -> str:
-    """Get office name from code."""
-    return OFFICE_CODES.get(str(code), f'Unknown Office ({code})')
+    """Office sought. Codes 11/22/33/44/55/66 are the 2021 Program A offices."""
+    return _codes.label("OFFICECD", code)
+
 
 def get_candidate_class_desc(code: str) -> str:
-    """Get candidate class description from code."""
-    return CANDIDATE_CLASS.get(code, f'Unknown Class ({code})')
+    """Resolve the export's abbreviation (P/NP/L/UN), not the key's label."""
+    key = _codes._code_key(code)
+    if key is None:
+        return "Unknown"
+    return CANDIDATE_CLASS.get(key, f"Unknown Class ({code})")
+
 
 def get_contributor_type(code: str) -> str:
-    """Get contributor type from code."""
-    return CONTRIBUTOR_CODES.get(code, 'Unknown Type')
+    return _codes.label("C_CODE", code, default="Unknown")
+
 
 def get_borough_name(code: str) -> str:
-    """Get borough name from code."""
-    return BOROUGH_CODES.get(code, 'Unknown Borough')
+    return _codes.label("BOROUGHCD", code)
 
-def get_payment_method(code: int) -> str:
-    """Get payment method from code."""
-    return PAYMENT_METHODS.get(code, 'Unknown Method')
+
+def get_payment_method(code) -> str:
+    return _codes.label("PAY_METHOD", code)
+
 
 def get_schedule_description(code: str) -> str:
-    """Get schedule description from code."""
-    return SCHEDULE_TYPES.get(code, f'Unknown Schedule ({code})')
+    """Schedule. Note M is Receipt Adjustments (refunds, negative AMNT), not
+    matchable contributions, and D is In-Kind, not expenditures. Schedule X
+    appears in the data but not in CFB's key."""
+    return _codes.label("SCHEDULE", code, default=f"Unknown Schedule ({code})")
 
-def get_adjustment_type(code: int) -> str:
-    """Get adjustment type from code."""
-    return ADJUSTMENT_TYPES.get(code, 'Unknown Adjustment')
+
+def get_adjustment_type(code) -> str:
+    return _codes.label("ADJTYPECD", code)
+
 
 def parse_election_cycle(election: str) -> tuple:
     """Parse election cycle string into year and type."""
