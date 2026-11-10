@@ -56,7 +56,7 @@ Enhanced schema with geographic capabilities:
 - **voters** - 7,287 records with latitude/longitude
 - **contributors** - Individual contributors with geocoding
 - **organizations** - Separated organizational contributors
-- **contributions** - 2M+ contribution records (import ongoing)
+- **contributions** - 2,123,892 contribution records ($709.6M), fully loaded
 - **expenditures** - Campaign expenditure records
 - **intermediaries** - Bundler/intermediary records
 - **voter_contributor_matches** - Match results with confidence scores
@@ -96,9 +96,16 @@ python scripts/fast_voter_matching.py
 
 ## Current Data Status
 - **Voters**: 7,287 loaded (122 geocoded)
-- **Contributors**: Being imported (64,720+ contributions loaded)
-- **Total Contributions**: $24.3M+ loaded (targeting $700M)
-- **Organizations**: 2,131 identified
+- **Contributors**: 946,403 loaded (deduped by normalized name)
+- **Total Contributions**: 2,123,892 rows, $709,597,913.31 — the full CFB export
+- **Expenditures**: 669,276 rows, $1,120,064,358.68
+- **Intermediaries**: 6,116 bundlers
+- **NYSBOE**: 6,182,834 contributions (2016+) and 81,483 filer registry rows
+
+Loaded from the CFB/NYSBOE bulk exports via `scripts/load_cfb_filers.py` then
+`scripts/cfb_normalize.sql`. See [data/cfb/README.md](data/cfb/README.md) — in
+particular, the `UNIQUE(refno)` constraints that previously blocked ~90% of each
+file had to be dropped, since REFNO is a filing page reference and is not unique.
 - **Individual Contributors**: 577,737 identified
 
 ## Workflows

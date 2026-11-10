@@ -1,0 +1,4 @@
+# NYSBOE bulk contribution downloads (regenerate with scripts/download_nysboe_contributions.py)
+*.csv
+*.log
+download_state.json*

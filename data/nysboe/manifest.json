@@ -1,0 +1,38 @@
+{
+  "source_dataset": "https://data.ny.gov/d/e9ss-239a",
+  "source_api": "https://data.ny.gov/resource/e9ss-239a.csv",
+  "publisher": "New York State Board of Elections (via data.ny.gov)",
+  "equivalent_ui": "https://publicreporting.elections.ny.gov/DownloadCampaignFinanceData/DownloadCampaignFinanceData",
+  "downloaded_at_utc": "2026-11-05T01:45:58Z",
+  "filter": {
+    "sched_date_from": "2016-01-01",
+    "filing_sched_abbrev": [
+      "A",
+      "B",
+      "C",
+      "D"
+    ]
+  },
+  "schedule_meanings": {
+    "A": "Monetary Contributions Received From Ind. & Part.",
+    "B": "Monetary Contributions Received From Corporation",
+    "C": "Monetary Contributions Received From All Other",
+    "D": "In-Kind (Non-Monetary) Contributions Received"
+  },
+  "files": {
+    "contributions_2016_present.csv": {
+      "rows": 6182665,
+      "expected": 6182665
+    },
+    "contributions_null_sched_date.csv": {
+      "rows": 169,
+      "expected": 169
+    }
+  },
+  "pagination": {
+    "key": "filing_trans_id",
+    "page_size": 50000,
+    "pages": 124
+  },
+  "complete": true
+}
